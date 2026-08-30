@@ -4,7 +4,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="DSH Desktop"
+APP_NAME="DSH Desktop Community"
 APP=".build/${APP_NAME}.app"
 VERSION="${VERSION:-}"
 
@@ -25,24 +25,26 @@ STAGING="$(mktemp -d "${TMPDIR:-/tmp}/dsh-desktop-release.XXXXXX")"
 cleanup() { rm -rf "$STAGING"; }
 trap cleanup EXIT
 
-mkdir -p "$DIST" "$STAGING/DSH Desktop"
-rm -f "$DIST/DSH-Desktop-${VERSION}.zip" "$DIST/DSH-Desktop-${VERSION}.dmg" \
-    "$DIST/DSH-Desktop-latest.zip" "$DIST/DSH-Desktop-latest.zip.sha256"
+VOLUME_NAME="DSH Desktop Community"
+ASSET_PREFIX="DSH-Desktop-Community"
+mkdir -p "$DIST" "$STAGING/$VOLUME_NAME"
+rm -f "$DIST/${ASSET_PREFIX}-${VERSION}.zip" "$DIST/${ASSET_PREFIX}-${VERSION}.dmg" \
+    "$DIST/${ASSET_PREFIX}-latest.zip" "$DIST/${ASSET_PREFIX}-latest.zip.sha256"
 
-ditto "$APP" "$STAGING/DSH Desktop/$APP_NAME.app"
-cp INSTALL.txt "$STAGING/DSH Desktop/INSTALL.txt"
-ln -s /Applications "$STAGING/DSH Desktop/Applications"
+ditto "$APP" "$STAGING/$VOLUME_NAME/$APP_NAME.app"
+cp README.md LICENSE NOTICE.md "$STAGING/$VOLUME_NAME/"
+ln -s /Applications "$STAGING/$VOLUME_NAME/Applications"
 
-ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/DSH-Desktop-${VERSION}.zip"
-cp "$DIST/DSH-Desktop-${VERSION}.zip" "$DIST/DSH-Desktop-latest.zip"
-hdiutil create -quiet -volname "DSH Desktop" -srcfolder "$STAGING/DSH Desktop" \
-    -ov -format UDZO "$DIST/DSH-Desktop-${VERSION}.dmg"
+ditto -c -k --sequesterRsrc --keepParent "$APP" "$DIST/${ASSET_PREFIX}-${VERSION}.zip"
+cp "$DIST/${ASSET_PREFIX}-${VERSION}.zip" "$DIST/${ASSET_PREFIX}-latest.zip"
+hdiutil create -quiet -volname "$VOLUME_NAME" -srcfolder "$STAGING/$VOLUME_NAME" \
+    -ov -format UDZO "$DIST/${ASSET_PREFIX}-${VERSION}.dmg"
 
 (
     cd "$DIST"
-    shasum -a 256 "DSH-Desktop-${VERSION}.zip" "DSH-Desktop-${VERSION}.dmg" \
-        "DSH-Desktop-latest.zip" > SHA256SUMS.txt
-    shasum -a 256 "DSH-Desktop-latest.zip" > "DSH-Desktop-latest.zip.sha256"
+    shasum -a 256 "${ASSET_PREFIX}-${VERSION}.zip" "${ASSET_PREFIX}-${VERSION}.dmg" \
+        "${ASSET_PREFIX}-latest.zip" > SHA256SUMS.txt
+    shasum -a 256 "${ASSET_PREFIX}-latest.zip" > "${ASSET_PREFIX}-latest.zip.sha256"
 )
 
 echo "Release artifacts:"

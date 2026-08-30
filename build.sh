@@ -1,15 +1,21 @@
 #!/bin/bash
-# Build and ad-hoc sign a universal DSH Desktop app bundle.
+# Build and ad-hoc sign a universal DSH Desktop Community app bundle.
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="DSH Desktop"
+APP_NAME="DSH Desktop Community"
 APP=".build/${APP_NAME}.app"
 VERSION="${VERSION:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)}"
 BUILD_NUMBER="${BUILD_NUMBER:-$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Info.plist)}"
 ARCHS="${ARCHS:-arm64 x86_64}"
 MACOS_MIN="${MACOS_MIN:-13.0}"
+
+# Keep compiler caches inside the build directory unless the caller supplied a location.
+# GUI/sandboxed terminals may not be allowed to write Swift's default ~/.cache path.
+MODULE_CACHE="${CLANG_MODULE_CACHE_PATH:-$PWD/.build/module-cache}"
+export CLANG_MODULE_CACHE_PATH="$MODULE_CACHE"
+export SWIFT_MODULECACHE_PATH="${SWIFT_MODULECACHE_PATH:-$MODULE_CACHE}"
 
 RESDIR_FLAGS=()
 PATCHED_RESOURCE_DIR=""
@@ -36,34 +42,51 @@ fi
 
 echo "==> Cleaning build directory"
 rm -rf .build
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build/bin
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build/bin \
+    "$CLANG_MODULE_CACHE_PATH" "$SWIFT_MODULECACHE_PATH"
 
-echo "==> Generating app icon"
-swiftc -parse-as-library -O ${RESDIR_FLAGS[@]+"${RESDIR_FLAGS[@]}"} \
-    -o .build/icon-gen tools/IconGen.swift
-./.build/icon-gen
-mkdir -p .build/AppIcon.iconset
-sips -z 16 16 .build/icon-1024.png --out .build/AppIcon.iconset/icon_16x16.png >/dev/null
-sips -z 32 32 .build/icon-1024.png --out .build/AppIcon.iconset/icon_16x16@2x.png >/dev/null
-sips -z 32 32 .build/icon-1024.png --out .build/AppIcon.iconset/icon_32x32.png >/dev/null
-sips -z 64 64 .build/icon-1024.png --out .build/AppIcon.iconset/icon_32x32@2x.png >/dev/null
-sips -z 128 128 .build/icon-1024.png --out .build/AppIcon.iconset/icon_128x128.png >/dev/null
-sips -z 256 256 .build/icon-1024.png --out .build/AppIcon.iconset/icon_128x128@2x.png >/dev/null
-sips -z 256 256 .build/icon-1024.png --out .build/AppIcon.iconset/icon_256x256.png >/dev/null
-sips -z 512 512 .build/icon-1024.png --out .build/AppIcon.iconset/icon_256x256@2x.png >/dev/null
-sips -z 512 512 .build/icon-1024.png --out .build/AppIcon.iconset/icon_512x512.png >/dev/null
-cp .build/icon-1024.png .build/AppIcon.iconset/icon_512x512@2x.png
-iconutil -c icns .build/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
+echo "==> Copying app icon"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 echo "==> Compiling for: $ARCHS"
+SDK_CANDIDATES=()
+if [ -n "${SDKROOT:-}" ]; then
+    SDK_CANDIDATES+=("$SDKROOT")
+else
+    DEFAULT_SDK="$(xcrun --sdk macosx --show-sdk-path 2>/dev/null || true)"
+    if [ -n "$DEFAULT_SDK" ]; then SDK_CANDIDATES+=("$DEFAULT_SDK"); fi
+    for sdk in /Library/Developer/CommandLineTools/SDKs/MacOSX*.sdk; do
+        if [ -d "$sdk" ] && [ "$sdk" != "$DEFAULT_SDK" ]; then
+            SDK_CANDIDATES+=("$sdk")
+        fi
+    done
+fi
+if [ "${#SDK_CANDIDATES[@]}" -eq 0 ]; then
+    echo "No macOS SDK found. Install Xcode Command Line Tools." >&2
+    exit 1
+fi
+
 BINARIES=()
 for arch in $ARCHS; do
     binary=".build/bin/DSHLauncher-${arch}"
-    swiftc -parse-as-library -O -swift-version 5 \
-        ${RESDIR_FLAGS[@]+"${RESDIR_FLAGS[@]}"} \
-        -target "${arch}-apple-macosx${MACOS_MIN}" \
-        -framework SwiftUI -framework AppKit -framework WebKit -framework CoreImage \
-        -o "$binary" Sources/DSHLauncher.swift
+    compiled=false
+    for sdk in "${SDK_CANDIDATES[@]}"; do
+        echo "==> Trying SDK: $sdk"
+        if swiftc -parse-as-library -O -swift-version 5 \
+            ${RESDIR_FLAGS[@]+"${RESDIR_FLAGS[@]}"} \
+            -sdk "$sdk" \
+            -target "${arch}-apple-macosx${MACOS_MIN}" \
+            -framework SwiftUI -framework AppKit -framework WebKit \
+            -o "$binary" Sources/DSHLauncher.swift; then
+            compiled=true
+            break
+        fi
+        echo "==> SDK was incompatible with the installed Swift compiler; trying another"
+    done
+    if [ "$compiled" != true ]; then
+        echo "Could not compile for $arch with any installed macOS SDK." >&2
+        exit 1
+    fi
     BINARIES+=("$binary")
 done
 
@@ -75,7 +98,7 @@ fi
 
 echo "==> Assembling app bundle"
 cp Info.plist "$APP/Contents/Info.plist"
-cp Resources/remote-bridge.js "$APP/Contents/Resources/remote-bridge.js"
+cp LICENSE NOTICE.md "$APP/Contents/Resources/"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" "$APP/Contents/Info.plist"
 codesign --force --deep --sign - "$APP"

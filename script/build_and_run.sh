@@ -3,9 +3,9 @@ set -euo pipefail
 
 MODE="${1:-run}"
 APP_NAME="DSHLauncher"
-BUNDLE_ID="com.fangchen.dsh-launcher"
+BUNDLE_ID="io.github.dramtea.dsh-desktop-community"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/.build/DSH Desktop.app"
+APP_BUNDLE="$ROOT_DIR/.build/DSH Desktop Community.app"
 APP_BINARY="$APP_BUNDLE/Contents/MacOS/DSHLauncher"
 
 pkill -x "$APP_NAME" >/dev/null 2>&1 || true
@@ -36,7 +36,7 @@ case "$MODE" in
         open_app
         sleep 3
         pgrep -x "$APP_NAME" >/dev/null
-        echo "DSH Desktop is running."
+        echo "DSH Desktop Community is running."
         ;;
     *)
         echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2

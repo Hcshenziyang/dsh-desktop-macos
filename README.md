@@ -1,235 +1,153 @@
-# DSH Desktop for macOS and Windows
+# DSH Desktop Community for macOS
 
-[中文说明](#中文说明) · [Download](https://github.com/frankfika/dsh-desktop-macos/releases/latest) · [Report a bug](https://github.com/frankfika/dsh-desktop-macos/issues)
+一个专注 macOS 的 DSH 桌面客户端社区分支。应用使用 SwiftUI 与 WKWebView，负责发现、
+启动、停止和重启本机的 `dsh web` 服务，并在原生窗口中显示 DeepSeek Harness Web UI。
 
-A native desktop shell for the official
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI on macOS and
-Windows. It starts and stops the local `dsh` service, embeds the UI using WKWebView on
-macOS or Microsoft Edge WebView2 on Windows, and keeps runtime logs and common controls
-in one window.
+> [!IMPORTANT]
+> 本仓库是 [frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos)
+> 的修改分支，基于上游提交
+> [`7bf53cd`](https://github.com/frankfika/dsh-desktop-macos/commit/7bf53cd9b14e5cf4861f92f46157bfd8e7ba150a)。
+> 它不是 DeepSeek、DeepSeek Harness 或原作者的官方产品，也未获得这些主体的隶属、
+> 认可或背书。Android、iOS 和 Windows 客户端已从本分支移除。
 
-> This is an independent community project. It is not an official DeepSeek product and
-> is not affiliated with or endorsed by DeepSeek. DeepSeek Harness is installed separately
-> from the official `@deepseek-ai/dsh` npm package.
+## 功能
 
-## macOS Quick Install / macOS 快速安装
+- 原生 SwiftUI + WebKit macOS 应用，不引入第三方 App 依赖
+- 同时支持 Apple Silicon 与 Intel Mac
+- 检测已有 `dsh web` 服务，或从应用中启动、停止和重启服务
+- 在浏览器中打开、登录时启动、实时日志和常用运行控制
+- 检测 Homebrew、npm、nvm、WorkBuddy 及常见 DSH 安装位置
+- 缺少运行时时，可单独安装官方 npm 包 `@deepseek-ai/dsh`
+- 可配置的本地模型服务按钮，可启动和停止用户选择的程序或脚本
+- 原生归档管理，可查看、恢复、逐条删除或清空 DSH 已归档会话
+- 简化内嵌插件列表，默认聚焦用户安装和异常运行单元，官方组件保留在高级视图
 
-Install [Node.js 22.19+ or 24+](https://nodejs.org/), then run this command in Terminal：
-先安装 Node.js 22.19+ 或 24+，再在终端运行：
+## 系统要求
 
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/frankfika/dsh-desktop-macos/main/install.sh)"
-```
+- macOS 13 Ventura 或更高版本
+- Node.js 22.19+ 或 24+
+- `@deepseek-ai/dsh`（应用可协助单独安装）
 
-The open-source installer verifies the GitHub Release SHA-256 before installing and
-removes quarantine only from the verified DSH Desktop bundle. It also installs the
-official `@deepseek-ai/dsh` runtime and launches the app.
+DeepSeek Harness 可能读取或修改你选择的工作目录。首次使用建议选择临时项目、使用
+受限凭据，并认真检查每次权限请求。不要把 DSH Web 服务直接暴露到公网。
 
-开源安装器会先校验 GitHub Release 的 SHA-256，再安装应用；它只解除校验通过的 DSH
-Desktop 应用隔离属性，同时安装官方 `@deepseek-ai/dsh` 运行时并启动应用。
+## 从源码构建
 
-## Windows Download / Windows 下载
-
-Download the appropriate portable ZIP from
-[the latest Release](https://github.com/frankfika/dsh-desktop-macos/releases/latest):
-
-- `DSH-Desktop-Windows-win-x64-*.zip` for most Intel/AMD Windows computers
-- `DSH-Desktop-Windows-win-arm64-*.zip` for Windows on ARM
-
-Extract the ZIP and run **DSH Desktop.exe**. The Windows build is self-contained, so .NET
-does not need to be installed. Node.js 22.19+ or 24+ is still required. If DSH is missing,
-click **Install official DSH runtime** inside the app; it installs the official npm package
-to `%USERPROFILE%\.dsh\app` and starts the service automatically.
-
-从最新 Release 下载对应的 Windows 便携 ZIP，解压后运行 **DSH Desktop.exe**。大多数
-电脑选择 `win-x64`，Windows ARM 设备选择 `win-arm64`。应用已包含 .NET 运行时；仍需
-Node.js 22.19+ 或 24+。如果没有 DSH，在应用中点击 **Install official DSH runtime**
-即可安装官方 npm 包并自动启动。
-
-## Features
-
-- Native SwiftUI + WebKit app with no third-party app dependencies
-- Universal binary for Apple Silicon and Intel Macs
-- Native Windows 10/11 app using WinForms and Microsoft Edge WebView2
-- Self-contained Windows x64 and ARM64 builds with no separate .NET requirement
-- Detects an existing healthy `dsh web` process or starts one automatically
-- Start, stop, restart, open in browser, launch at login, and live logs
-- Pair a phone by QR code, control the desktop runtime, and use the complete DSH Web UI
-  through an authenticated local proxy (macOS)
-- Detects Homebrew, npm, nvm, WorkBuddy, and the recommended local installation path
-- Offers one-click installation of the official `@deepseek-ai/dsh` runtime when missing
-- Cleans up an unresponsive `dsh` process after confirming that its local HTTP endpoint
-  is unhealthy
-
-## Requirements
-
-- macOS 13 Ventura or newer
-- Node.js 22.19+ or 24+
-- The official `@deepseek-ai/dsh` package
-
-DeepSeek Harness is currently a developer preview. It can run tools that read or modify
-the workspace you select. Start with a disposable project, use limited credentials, and
-review approval requests.
-
-## Install
-
-Install [Node.js](https://nodejs.org/) first, then use the verified community installer:
+安装 Xcode Command Line Tools 后运行：
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/frankfika/dsh-desktop-macos/main/install.sh)"
-```
-
-The installer downloads the latest ZIP from GitHub Releases, verifies its SHA-256
-checksum, installs the app, removes quarantine only from that app bundle, installs the
-official `@deepseek-ai/dsh` runtime, and launches DSH Desktop. Review
-[install.sh](install.sh) before running it if you prefer.
-
-If the app was installed manually and cannot find DSH, its first-run screen provides an
-**Install official DSH runtime** button. The app invokes npm directly without a shell and
-installs the official package into `~/.dsh/app`, then starts the service automatically.
-
-You can also download the universal `.dmg` from
-[GitHub Releases](https://github.com/frankfika/dsh-desktop-macos/releases/latest) and
-install manually. The community build is ad-hoc signed because the project does not yet
-have an Apple Developer ID certificate. For a manual first launch, Control-click the app
-in Finder, choose **Open**, then confirm **Open**.
-
-## Build from source
-
-Xcode Command Line Tools are sufficient:
-
-```bash
-git clone https://github.com/frankfika/dsh-desktop-macos.git
+git clone https://github.com/Hcshenziyang/dsh-desktop-macos.git
 cd dsh-desktop-macos
 ./build.sh
-open ".build/DSH Desktop.app"
+open ".build/DSH Desktop Community.app"
 ```
 
-## Control DSH from your phone (macOS)
-
-1. Open **DSH Desktop** and click **Phone / 手机** in the toolbar.
-2. Turn on mobile remote control. Keep the Mac and phone on the same Wi-Fi network.
-3. Scan the QR code with the phone. The one-time link stores a protected pairing session
-   in the phone browser and immediately removes the token from the address bar.
-4. The mobile dashboard can start, stop, or restart the DSH process. Tap **Open complete
-   DeepSeek Harness** to use the normal Harness UI from the phone. On iPhone, Safari's
-   **Add to Home Screen** makes it behave like a lightweight companion app.
-
-DSH itself continues to listen only on `127.0.0.1`. DSH Desktop runs a separate bridge on
-port `3081`, checks a random per-install pairing token, and proxies both HTTP and WebSocket
-traffic. You can change the bridge port or reset all paired phones from the desktop app.
-For access away from home, connect the Mac and phone with an encrypted private network such
-as Tailscale; do not forward port `3081` directly from a public router because the local
-bridge intentionally uses HTTP and relies on the trusted LAN or encrypted overlay network.
-
-### Native iPhone companion
-
-The repository also includes a native SwiftUI client in `ios/`. It provides camera QR
-pairing, Keychain-backed credentials, a native status/control dashboard, pull to refresh,
-and an authenticated in-app Harness browser.
-
-```bash
-cd ios
-./generate.sh
-open DSHMobile.xcodeproj
-```
-
-Select the `DSHMobile` scheme and your iPhone, choose your Apple development team under
-Signing & Capabilities, then press Run. In DSH Mobile, scan the QR code shown by the Mac
-app. The deployment target is iOS 17.
-
-### Native Android companion
-
-The native Android client lives in `android/` and supports Android 8.0 (API 26) or newer.
-It uses Google Code Scanner for permission-free QR pairing, Android Keystore AES-GCM for
-the pairing credential, a native status/control dashboard, and an authenticated WebView
-for the full Harness UI.
-
-```bash
-cd android
-./build_and_verify.sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-The verification script runs unit tests, builds the debug APK, and requires Android Lint
-to pass. For normal installation, download the signed `DSH-Mobile-Android-*.apk` from the
-latest GitHub Release. On a phone, open DSH Mobile and scan the same QR code shown by DSH Desktop.
-
-`build.sh` produces an ad-hoc-signed universal app by default. To build only for the
-current architecture:
+默认生成 Apple Silicon 与 Intel 通用版本。只构建当前架构：
 
 ```bash
 ARCHS="$(uname -m)" ./build.sh
 ```
 
-Create local ZIP and DMG artifacts with:
+创建 ZIP、DMG 和 SHA-256 校验文件：
 
 ```bash
 ./scripts/package.sh
 ```
 
-Pushing a tag such as `v1.2.0` runs the GitHub Actions release workflow and attaches the
-universal macOS ZIP/DMG, Windows portable builds, signed Android APK, and SHA-256 checksums
-to a GitHub Release.
+当前仓库不提供指向上游发布包的自动安装脚本，避免社区分支与上游二进制混淆。
+准备公开发布前请完成 [发布检查清单](PUBLISHING.md)。
 
-## Project structure
+## 本地模型服务
+
+工具栏提供通用的“启动模型 / 停止模型”按钮。首次使用时在“设置 → 本地模型服务”中
+配置：
+
+- 显示名称，例如 `Qwen 27B`、`MLX Server` 或 `Ollama`
+- 启动程序：可执行文件，或具有执行权限并包含正确 shebang 的脚本
+- 启动参数：使用普通命令行写法，路径含空格时可使用单双引号
+- 停止程序与停止参数：可选；启动脚本会转为后台服务时建议配置
+- 健康检查 URL：可选，例如 `http://127.0.0.1:8000/health`
+- 退出应用时是否停止本地模型
+
+例如，已有 `start.sh` / `stop.sh` 的 Qwen 服务可以配置为：
 
 ```text
-Sources/DSHLauncher.swift  Process lifecycle, SwiftUI window, and embedded Web UI
-Resources/remote-bridge.js Authenticated mobile dashboard and HTTP/WebSocket proxy
-ios/                       Native DSH Mobile iPhone app and generated Xcode project
-android/                   Native DSH Mobile Android app, Gradle wrapper, tests, and APK build
-tools/IconGen.swift        Programmatic app icon generator
-Info.plist                 macOS bundle metadata
-build.sh                   Reproducible universal app build
-install.sh                 Verified community installer
-script/build_and_run.sh    Local build, launch, and verification entrypoint
-scripts/package.sh         ZIP, DMG, and checksum packaging
-.github/workflows/         Continuous integration and tagged releases
+名称:       Qwen 27B
+启动程序:   ~/Qwen38-27B-DSH/start.sh
+停止程序:   ~/Qwen38-27B-DSH/stop.sh
+健康检查:   http://127.0.0.1:8000/health
 ```
 
-## Security and privacy
+应用使用 `Process` 直接执行所选程序，并把参数作为数组传递，不交给 Shell 解释。因此不
+支持 `|`、`&&`、重定向、环境变量展开或 `$()` 命令替换。所选程序拥有当前 macOS 用户的
+权限，只应配置自己编写或已确认可信的程序。仓库不会附带、下载或分发模型权重。
 
-DSH Desktop talks only to the loopback service address configured in the app. Model
-credentials and session data are owned by DeepSeek Harness, not by this launcher. Do not
-bind the DSH Web service to a public network interface without authentication and TLS.
-See [SECURITY.md](SECURITY.md) for reporting vulnerabilities.
+## 归档管理
+
+当前 DSH 的“归档会话”只会隐藏会话，Web UI 暂未提供归档列表、取消归档或永久删除入口。
+本客户端在工具栏提供原生归档管理按钮，用于：
+
+- 查看 `~/.dsh` 中的归档会话、工作目录、更新时间和日志大小
+- 恢复会话（仅移除归档标记，不改动日志）
+- 永久删除单条会话，或清空全部归档
+
+为避免运行中的 DSH 把内存状态重新写回磁盘，恢复和删除只会在 DSH 服务停止时启用。
+删除操作不会直接擦除日志：客户端先把 `workspace.json` 与
+`session_projcache.json` 备份到 `~/.dsh/backups/archive-manager/`，再将对应 JSONL
+会话目录移到 macOS 废纸篓，并清理工作区、归档集合和摘要缓存中的引用。用户在清空废纸
+篓前仍可找回日志。如果设置了 `DSH_HOME`，客户端会改用该数据目录。
+
+## 插件列表简化
+
+DSH Web 的“插件列表”实际展示的是 Cordis Loader 的全部运行单元，官方会话、模型、工具和
+Web UI 组件也会平铺在同一列表中。客户端默认对**内嵌 Web UI** 增加一层纯展示筛选：
+
+- **用户安装**：读取 `~/.dsh/profiles/web/package.json` 的 `dependencies`，只显示这些
+  Bundle 贡献的运行单元
+- **异常 / 等待**：集中显示挂载失败、等待依赖、加载中或正在卸载的单元
+- **全部运行单元**：保留 DSH 原始完整清单，作为高级诊断视图
+
+该功能只操作 WKWebView 中已经渲染的 DOM，不修改 DSH 核心、profile 配置或
+`node_modules`。它依赖上游插件卡片公开的 `data-plugin-entry`、`data-phase` 和
+`data-enabled` 属性；如果未来 DSH 改变界面结构，增强层找不到这些标记时会停止处理，原始
+列表仍可使用。可以在客户端“设置”中关闭“简化内嵌 Web UI 的插件列表”。通过“系统浏览器”
+打开 DSH 时仍显示上游原始界面。
+
+## 项目结构
+
+```text
+Sources/DSHLauncher.swift  macOS 生命周期、SwiftUI 界面与嵌入式 Web UI
+Resources/AppIcon.icns     App 图标资源
+Info.plist                 macOS Bundle 元数据
+build.sh                   通用 macOS App 构建脚本
+script/build_and_run.sh    本地构建、启动和调试入口
+scripts/package.sh         ZIP、DMG 与校验文件打包脚本
+.github/workflows/         macOS CI 与 Release 工作流
+```
+
+## 来源、许可与商标
+
+- 原始项目代码版权归 Fang Chen 所有，依据 [MIT License](LICENSE) 使用和再发布。
+- 本分支保留完整 Git 历史、原始版权声明和许可文本；修改部分由相应贡献者持有版权。
+- DeepSeek Harness 是独立项目，通过官方 `@deepseek-ai/dsh` npm 包单独安装；本仓库不
+  包含它的源码、模型权重或用户凭据。
+- “DeepSeek”“DSH”及相关名称仅用于说明兼容对象。MIT 许可不授予任何商标权。
+
+详情见 [NOTICE.md](NOTICE.md)。
 
 ## License
 
-DSH Desktop is released under the [MIT License](LICENSE). DeepSeek Harness is a separate
-project distributed under its own MIT license and third-party notices.
+本项目依据 [MIT License](LICENSE) 发布。保留原始版权与许可声明是复制、修改或分发
+本项目的条件。
 
 ---
 
-## 中文说明
+## English summary
 
-DSH Desktop 是官方
-[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) Web UI 的轻量原生
-macOS 桌面壳。它负责启动和停止本机 `dsh` 服务、把网页界面嵌入桌面窗口，并集中提供
-重启、浏览器打开、开机自启和日志查看。
-
-本项目是独立社区项目，不是 DeepSeek 官方产品，也不与 DeepSeek 存在隶属或背书关系；
-DeepSeek Harness 运行时始终从官方 npm 包 `@deepseek-ai/dsh` 单独安装。
-
-### 安装
-
-先安装 Node.js 22.19+ 或 24+，再在终端运行社区验证安装器：
-
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/frankfika/dsh-desktop-macos/main/install.sh)"
-```
-
-安装器会从 GitHub Release 下载最新版 ZIP、核对 SHA-256、安装应用、仅移除该 App 的
-隔离标记、安装官方 `@deepseek-ai/dsh` 运行时并启动应用。运行前可先查看仓库中的
-[install.sh](install.sh) 源码。
-
-如果手动安装 App 且本机没有 DSH，首次启动页面会显示“一键安装官方 DSH 运行时”按钮。
-应用会直接调用 npm（不经过 shell）将官方包安装到 `~/.dsh/app`，完成后自动启动服务。
-
-也可以从 [Releases](https://github.com/frankfika/dsh-desktop-macos/releases/latest) 下载
-通用 `.dmg` 手动安装。目前发布包使用临时签名，因为项目尚无 Apple Developer ID；手动
-安装后第一次打开时，请在 Finder 里按住 Control 点击应用，选择“打开”，再次确认。
-
-DeepSeek Harness 仍处于开发者预览阶段，智能体可能读取或修改你选择的工作目录。建议先在
-临时项目中使用受限凭据测试，并认真检查每一次权限确认。
+DSH Desktop Community is a macOS-only derivative of
+[frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos). It is an
+independent community project and is not affiliated with, endorsed by, or an official
+product of DeepSeek, DeepSeek Harness, or the upstream author. The upstream copyright and
+MIT license are preserved. DeepSeek Harness is installed separately; this repository does
+not distribute model weights or credentials. See [NOTICE.md](NOTICE.md) for attribution and
+trademark information.

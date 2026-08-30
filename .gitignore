@@ -4,8 +4,11 @@
 DerivedData/
 xcuserdata/
 *.xcuserstate
-android/.gradle/
-android/**/build/
-android/local.properties
+.module-cache/
+.env
+.env.*
+!.env.example
+*.gguf
+*.safetensors
 *.dmg
 *.zip

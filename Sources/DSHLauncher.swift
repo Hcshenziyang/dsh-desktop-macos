@@ -3,7 +3,6 @@ import AppKit
 @preconcurrency import WebKit
 import ServiceManagement
 import Darwin
-import CoreImage.CIFilterBuiltins
 
 // MARK: - 小工具函数
 
@@ -197,35 +196,6 @@ func dynamicNodeBinDirs(home: String) -> [String] {
     return dirs
 }
 
-/// 优先返回 Wi-Fi/有线网卡的 IPv4 地址，供手机在同一局域网访问。
-func localNetworkAddress() -> String? {
-    var head: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&head) == 0, let first = head else { return nil }
-    defer { freeifaddrs(head) }
-    var candidates: [(name: String, address: String)] = []
-    var cursor: UnsafeMutablePointer<ifaddrs>? = first
-    while let item = cursor {
-        let flags = Int32(item.pointee.ifa_flags)
-        if let addr = item.pointee.ifa_addr,
-           addr.pointee.sa_family == UInt8(AF_INET),
-           (flags & IFF_UP) != 0, (flags & IFF_LOOPBACK) == 0 {
-            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            if getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
-                candidates.append((String(cString: item.pointee.ifa_name), String(cString: host)))
-            }
-        }
-        cursor = item.pointee.ifa_next
-    }
-    return candidates.sorted { lhs, rhs in
-        let priority = { (name: String) -> Int in name == "en0" ? 0 : (name.hasPrefix("en") ? 1 : 2) }
-        return priority(lhs.name) < priority(rhs.name)
-    }.first?.address
-}
-
-func makeRemoteToken() -> String {
-    (UUID().uuidString + UUID().uuidString).replacingOccurrences(of: "-", with: "").lowercased()
-}
-
 // MARK: - 状态机
 
 enum DSHState: Equatable {
@@ -282,12 +252,534 @@ enum DSHState: Equatable {
     }
 }
 
+enum LocalModelState: Equatable {
+    case stopped
+    case starting
+    case ready
+    case stopping
+    case failed(String)
+}
+
+/// 展开用户输入路径中的 `~`，方便在设置中填写 `~/models/start.sh`。
+func expandedUserPath(_ path: String) -> String {
+    (path as NSString).expandingTildeInPath
+}
+
+/// 当前 DSH 用户数据根目录；与从终端设置 `DSH_HOME` 的行为保持一致。
+func dshHomeDirectoryURL() -> URL {
+    let environmentHome = ProcessInfo.processInfo.environment["DSH_HOME"]?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    if let environmentHome, !environmentHome.isEmpty {
+        return URL(fileURLWithPath: expandedUserPath(environmentHome), isDirectory: true)
+    }
+    return FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".dsh", isDirectory: true)
+}
+
+/// 把常见的命令行参数文本拆成 Process.arguments。
+/// 支持单双引号与反斜杠，但不会执行 shell、管道、重定向或命令替换。
+func parseCommandArguments(_ input: String) -> [String]? {
+    var arguments: [String] = []
+    var current = ""
+    var quote: Character?
+    var escaping = false
+    var tokenStarted = false
+
+    for character in input {
+        if escaping {
+            current.append(character)
+            escaping = false
+            tokenStarted = true
+        } else if character == "\\" && quote != "'" {
+            escaping = true
+            tokenStarted = true
+        } else if let activeQuote = quote {
+            if character == activeQuote {
+                quote = nil
+            } else {
+                current.append(character)
+            }
+            tokenStarted = true
+        } else if character == "\"" || character == "'" {
+            quote = character
+            tokenStarted = true
+        } else if character.isWhitespace {
+            if tokenStarted {
+                arguments.append(current)
+                current = ""
+                tokenStarted = false
+            }
+        } else {
+            current.append(character)
+            tokenStarted = true
+        }
+    }
+
+    guard quote == nil, !escaping else { return nil }
+    if tokenStarted { arguments.append(current) }
+    return arguments
+}
+
+// MARK: - 归档会话数据
+
+struct ArchivedConversation: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let workspaceTitle: String?
+    let cwd: String?
+    let createdAt: Date?
+    let updatedAt: Date?
+    let byteCount: Int64
+    let directoryURL: URL?
+}
+
+private struct ArchiveWorkspaceInfo {
+    let title: String
+    let path: String
+}
+
+private struct ArchiveSnapshot {
+    let items: [ArchivedConversation]
+    let totalByteCount: Int64
+}
+
+private enum ArchiveManagerError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .message(let value): return value
+        }
+    }
+}
+
+/// DSH 目前只提供“归档（隐藏）”，没有取消归档或删除接口。
+/// 该管理器在服务停止时维护 DSH 的本地 JSON 索引，并把删除的日志目录移到废纸篓。
+final class ArchiveStore: ObservableObject {
+    @Published private(set) var items: [ArchivedConversation] = []
+    @Published private(set) var totalByteCount: Int64 = 0
+    @Published private(set) var isLoading = false
+    @Published private(set) var isBusy = false
+    @Published private(set) var statusMessage: String?
+    @Published private(set) var errorMessage: String?
+
+    let dataRootURL: URL
+
+    init() {
+        dataRootURL = dshHomeDirectoryURL()
+    }
+
+    var displayDataRoot: String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let path = dataRootURL.path
+        if path == home { return "~" }
+        if path.hasPrefix(home + "/") { return "~" + String(path.dropFirst(home.count)) }
+        return path
+    }
+
+    func reload() {
+        guard !isLoading, !isBusy else { return }
+        isLoading = true
+        errorMessage = nil
+        let root = dataRootURL
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                let snapshot = try Self.loadSnapshot(root: root)
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.items = snapshot.items
+                    self.totalByteCount = snapshot.totalByteCount
+                    self.isLoading = false
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.items = []
+                    self.totalByteCount = 0
+                    self.isLoading = false
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    func restore(_ conversation: ArchivedConversation, servicePort: Int) {
+        perform(servicePort: servicePort) {
+            let backup = try Self.restore(ids: [conversation.id], root: self.dataRootURL)
+            return "已恢复“\(conversation.title)”；索引备份：\(Self.abbreviatedPath(backup.path))"
+        }
+    }
+
+    func delete(_ conversation: ArchivedConversation, servicePort: Int) {
+        perform(servicePort: servicePort) {
+            let result = try Self.delete(ids: [conversation.id], root: self.dataRootURL)
+            return "已将“\(conversation.title)”移到废纸篓；索引备份：\(Self.abbreviatedPath(result.backup.path))"
+        }
+    }
+
+    func deleteAll(servicePort: Int) {
+        let ids = items.map(\.id)
+        guard !ids.isEmpty else { return }
+        perform(servicePort: servicePort) {
+            let result = try Self.delete(ids: ids, root: self.dataRootURL)
+            return "已清理 \(ids.count) 条归档会话（\(result.trashedCount) 个日志目录已移到废纸篓）；索引备份：\(Self.abbreviatedPath(result.backup.path))"
+        }
+    }
+
+    private func perform(servicePort: Int, operation: @escaping () throws -> String) {
+        guard !isBusy else { return }
+        isBusy = true
+        statusMessage = nil
+        errorMessage = nil
+        let root = dataRootURL
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                guard listeningPid(port: servicePort) == nil else {
+                    throw ArchiveManagerError.message("DSH 服务仍在监听端口 \(servicePort)。请先停止服务，避免运行中的进程覆盖会话索引。")
+                }
+                let message = try operation()
+                let snapshot = try Self.loadSnapshot(root: root)
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.items = snapshot.items
+                    self.totalByteCount = snapshot.totalByteCount
+                    self.isBusy = false
+                    self.statusMessage = message
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.isBusy = false
+                    self.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private static func loadSnapshot(root: URL) throws -> ArchiveSnapshot {
+        let workspaceURL = root.appendingPathComponent("storages/workspace.json")
+        let projectionURL = root.appendingPathComponent("storages/session_projcache.json")
+        let workspace = try readJSONObject(at: workspaceURL, label: "Workspace 索引")
+        let projection = try? readJSONObject(at: projectionURL, label: "会话摘要缓存")
+
+        guard let global = workspace["global"] as? [String: Any],
+              let archivedIds = global["archivedSessionIds"] as? [String] else {
+            throw ArchiveManagerError.message("Workspace 索引中没有有效的 archivedSessionIds。")
+        }
+
+        var workspaceBySession: [String: ArchiveWorkspaceInfo] = [:]
+        if let tables = workspace["tables"] as? [String: Any],
+           let workspaces = tables["workspaces"] as? [String: Any] {
+            for rawWorkspace in workspaces.values {
+                guard let record = rawWorkspace as? [String: Any],
+                      let sessionIds = record["sessionIds"] as? [String] else { continue }
+                let title = record["title"] as? String ?? ""
+                let path = record["path"] as? String ?? ""
+                let info = ArchiveWorkspaceInfo(title: title, path: path)
+                for id in sessionIds { workspaceBySession[id] = info }
+            }
+        }
+
+        var projectionSessions: [String: Any] = [:]
+        if let projection,
+           let tables = projection["tables"] as? [String: Any],
+           let sessions = tables["sessions"] as? [String: Any] {
+            projectionSessions = sessions
+        }
+        let directories = sessionDirectoryMap(root: root)
+
+        let items = archivedIds.map { id -> ArchivedConversation in
+            let record = projectionSessions[id] as? [String: Any]
+            let identity = record?["identity"] as? [String: Any]
+            let rows = record?["rows"] as? [String: Any]
+            let titleRecord = rows?["title"] as? [String: Any]
+            let metadataRecord = rows?["sessionListMetadata"] as? [String: Any]
+            let metadata = metadataRecord?["val"] as? [String: Any]
+            let rawTitle = (titleRecord?["val"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let workspaceInfo = workspaceBySession[id]
+            let cachedCwd = identity?["cwd"] as? String
+            let directory = directories[id]
+            let createdAt = dateFromMilliseconds(identity?["createdAt"])
+            let updatedAt = dateFromMilliseconds(metadata?["lastPromptAt"]) ?? createdAt
+            return ArchivedConversation(
+                id: id,
+                title: rawTitle.flatMap { $0.isEmpty ? nil : $0 } ?? "未命名会话",
+                workspaceTitle: workspaceInfo?.title,
+                cwd: cachedCwd ?? workspaceInfo?.path,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                byteCount: directory.map(directoryByteCount) ?? 0,
+                directoryURL: directory
+            )
+        }.sorted {
+            let left = $0.updatedAt ?? $0.createdAt ?? .distantPast
+            let right = $1.updatedAt ?? $1.createdAt ?? .distantPast
+            if left != right { return left > right }
+            return $0.id < $1.id
+        }
+        return ArchiveSnapshot(items: items, totalByteCount: items.reduce(0) { $0 + $1.byteCount })
+    }
+
+    private static func restore(ids: [String], root: URL) throws -> URL {
+        let workspaceURL = root.appendingPathComponent("storages/workspace.json")
+        let originalData = try Data(contentsOf: workspaceURL)
+        var workspace = try readJSONObject(data: originalData, label: "Workspace 索引")
+        guard var global = workspace["global"] as? [String: Any],
+              let archived = global["archivedSessionIds"] as? [String] else {
+            throw ArchiveManagerError.message("Workspace 索引中没有有效的 archivedSessionIds。")
+        }
+        let targets = Set(ids)
+        guard archived.contains(where: targets.contains) else {
+            throw ArchiveManagerError.message("所选会话已不在归档列表中，请刷新后重试。")
+        }
+        global["archivedSessionIds"] = archived.filter { !targets.contains($0) }
+        workspace["global"] = global
+        let replacement = try jsonData(workspace)
+        let backup = try createBackup(
+            root: root, operation: "restore", ids: ids,
+            workspaceData: originalData, projectionData: nil
+        )
+        do {
+            try replacement.write(to: workspaceURL, options: .atomic)
+        } catch {
+            throw ArchiveManagerError.message("无法写入 Workspace 索引：\(error.localizedDescription)。原文件未被替换，备份位于 \(abbreviatedPath(backup.path))。")
+        }
+        return backup
+    }
+
+    private static func delete(ids: [String], root: URL) throws -> (backup: URL, trashedCount: Int) {
+        let fileManager = FileManager.default
+        let workspaceURL = root.appendingPathComponent("storages/workspace.json")
+        let projectionURL = root.appendingPathComponent("storages/session_projcache.json")
+        let workspaceOriginalData = try Data(contentsOf: workspaceURL)
+        var workspace = try readJSONObject(data: workspaceOriginalData, label: "Workspace 索引")
+        guard var global = workspace["global"] as? [String: Any],
+              let archived = global["archivedSessionIds"] as? [String] else {
+            throw ArchiveManagerError.message("Workspace 索引中没有有效的 archivedSessionIds。")
+        }
+
+        let requested = Set(ids)
+        let existing = archived.filter(requested.contains)
+        guard !existing.isEmpty else {
+            throw ArchiveManagerError.message("所选会话已不在归档列表中，请刷新后重试。")
+        }
+        let targets = Set(existing)
+        global["archivedSessionIds"] = archived.filter { !targets.contains($0) }
+        workspace["global"] = global
+
+        if var tables = workspace["tables"] as? [String: Any],
+           var workspaces = tables["workspaces"] as? [String: Any] {
+            for (workspaceId, rawWorkspace) in workspaces {
+                guard var record = rawWorkspace as? [String: Any],
+                      let sessionIds = record["sessionIds"] as? [String] else { continue }
+                record["sessionIds"] = sessionIds.filter { !targets.contains($0) }
+                workspaces[workspaceId] = record
+            }
+            tables["workspaces"] = workspaces
+            workspace["tables"] = tables
+        }
+        let workspaceReplacementData = try jsonData(workspace)
+
+        var projectionOriginalData: Data?
+        var projectionReplacementData: Data?
+        if fileManager.fileExists(atPath: projectionURL.path) {
+            let original = try Data(contentsOf: projectionURL)
+            var projection = try readJSONObject(data: original, label: "会话摘要缓存")
+            if var tables = projection["tables"] as? [String: Any],
+               var sessions = tables["sessions"] as? [String: Any] {
+                for id in targets { sessions.removeValue(forKey: id) }
+                tables["sessions"] = sessions
+                projection["tables"] = tables
+            }
+            projectionOriginalData = original
+            projectionReplacementData = try jsonData(projection)
+        }
+
+        let backup = try createBackup(
+            root: root, operation: "delete", ids: existing,
+            workspaceData: workspaceOriginalData, projectionData: projectionOriginalData
+        )
+
+        let directories = sessionDirectoryMap(root: root)
+        var moved: [(original: URL, trashed: URL)] = []
+        do {
+            for id in existing {
+                guard let original = directories[id], fileManager.fileExists(atPath: original.path) else { continue }
+                var resultingURL: NSURL?
+                try fileManager.trashItem(at: original, resultingItemURL: &resultingURL)
+                guard let trashed = resultingURL as URL? else {
+                    throw ArchiveManagerError.message("“\(id)”已请求移到废纸篓，但系统没有返回新位置。")
+                }
+                moved.append((original, trashed))
+            }
+        } catch {
+            let rollbackFailures = restoreMovedDirectories(moved)
+            let suffix = rollbackFailures.isEmpty ? "" : "；另有日志恢复失败：\(rollbackFailures.joined(separator: "、"))"
+            throw ArchiveManagerError.message("日志未能全部移到废纸篓：\(error.localizedDescription)\(suffix)")
+        }
+
+        do {
+            try workspaceReplacementData.write(to: workspaceURL, options: .atomic)
+            if let projectionReplacementData {
+                try projectionReplacementData.write(to: projectionURL, options: .atomic)
+            }
+        } catch {
+            try? workspaceOriginalData.write(to: workspaceURL, options: .atomic)
+            if let projectionOriginalData {
+                try? projectionOriginalData.write(to: projectionURL, options: .atomic)
+            }
+            let rollbackFailures = restoreMovedDirectories(moved)
+            let suffix = rollbackFailures.isEmpty ? "" : "；另有日志恢复失败：\(rollbackFailures.joined(separator: "、"))"
+            throw ArchiveManagerError.message("索引写入失败，已尝试回滚：\(error.localizedDescription)\(suffix)。备份位于 \(abbreviatedPath(backup.path))。")
+        }
+        return (backup, moved.count)
+    }
+
+    private static func readJSONObject(at url: URL, label: String) throws -> [String: Any] {
+        do {
+            return try readJSONObject(data: Data(contentsOf: url), label: label)
+        } catch let error as ArchiveManagerError {
+            throw error
+        } catch {
+            throw ArchiveManagerError.message("无法读取\(label)：\(url.path)（\(error.localizedDescription)）")
+        }
+    }
+
+    private static func readJSONObject(data: Data, label: String) throws -> [String: Any] {
+        do {
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw ArchiveManagerError.message("\(label)不是 JSON 对象。")
+            }
+            return object
+        } catch let error as ArchiveManagerError {
+            throw error
+        } catch {
+            throw ArchiveManagerError.message("\(label)格式无效：\(error.localizedDescription)")
+        }
+    }
+
+    private static func jsonData(_ object: [String: Any]) throws -> Data {
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw ArchiveManagerError.message("更新后的会话索引无法序列化。")
+        }
+        var data = try JSONSerialization.data(
+            withJSONObject: object,
+            options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        )
+        data.append(0x0A)
+        return data
+    }
+
+    private static func createBackup(
+        root: URL,
+        operation: String,
+        ids: [String],
+        workspaceData: Data,
+        projectionData: Data?
+    ) throws -> URL {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let name = formatter.string(from: Date()) + "-" + UUID().uuidString.prefix(8)
+        let directory = root
+            .appendingPathComponent("backups/archive-manager", isDirectory: true)
+            .appendingPathComponent(String(name), isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try workspaceData.write(to: directory.appendingPathComponent("workspace.json"), options: .atomic)
+            if let projectionData {
+                try projectionData.write(to: directory.appendingPathComponent("session_projcache.json"), options: .atomic)
+            }
+            let manifest: [String: Any] = [
+                "createdAt": ISO8601DateFormatter().string(from: Date()),
+                "operation": operation,
+                "sessionIds": ids,
+            ]
+            try jsonData(manifest).write(to: directory.appendingPathComponent("manifest.json"), options: .atomic)
+            return directory
+        } catch {
+            throw ArchiveManagerError.message("无法创建归档索引备份：\(error.localizedDescription)")
+        }
+    }
+
+    private static func sessionDirectoryMap(root: URL) -> [String: URL] {
+        let fileManager = FileManager.default
+        let sessionsRoot = root.appendingPathComponent("sessions", isDirectory: true)
+        guard let cwdDirectories = try? fileManager.contentsOfDirectory(
+            at: sessionsRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return [:] }
+        var result: [String: URL] = [:]
+        for cwdDirectory in cwdDirectories {
+            guard (try? cwdDirectory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true,
+                  let sessionDirectories = try? fileManager.contentsOfDirectory(
+                    at: cwdDirectory,
+                    includingPropertiesForKeys: [.isDirectoryKey],
+                    options: [.skipsHiddenFiles]
+                  ) else { continue }
+            for directory in sessionDirectories where directory.lastPathComponent.hasPrefix("session-") {
+                guard (try? directory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+                result[directory.lastPathComponent] = directory
+            }
+        }
+        return result
+    }
+
+    private static func directoryByteCount(_ directory: URL) -> Int64 {
+        let keys: Set<URLResourceKey> = [.isRegularFileKey, .fileSizeKey]
+        guard let enumerator = FileManager.default.enumerator(
+            at: directory,
+            includingPropertiesForKeys: Array(keys),
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: keys),
+                  values.isRegularFile == true else { continue }
+            total += Int64(values.fileSize ?? 0)
+        }
+        return total
+    }
+
+    private static func dateFromMilliseconds(_ value: Any?) -> Date? {
+        guard let number = value as? NSNumber else { return nil }
+        let milliseconds = number.doubleValue
+        guard milliseconds.isFinite, milliseconds > 0 else { return nil }
+        return Date(timeIntervalSince1970: milliseconds / 1000)
+    }
+
+    private static func restoreMovedDirectories(_ moved: [(original: URL, trashed: URL)]) -> [String] {
+        var failures: [String] = []
+        for pair in moved.reversed() {
+            do {
+                try FileManager.default.createDirectory(
+                    at: pair.original.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try FileManager.default.moveItem(at: pair.trashed, to: pair.original)
+            } catch {
+                failures.append(pair.original.lastPathComponent)
+            }
+        }
+        return failures
+    }
+
+    private static func abbreviatedPath(_ path: String) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        if path == home { return "~" }
+        if path.hasPrefix(home + "/") { return "~" + String(path.dropFirst(home.count)) }
+        return path
+    }
+}
+
 // MARK: - 核心管理器
 
 final class Manager: ObservableObject {
     static let shared = Manager()
 
-    @Published var state: DSHState = .stopped { didSet { updateRemoteStatus() } }
+    @Published var state: DSHState = .stopped
     @Published var logs: String = ""
     @Published var dshPath: String = UserDefaults.standard.string(forKey: "dshPath") ?? resolveDshPath()
     @Published var host: String = UserDefaults.standard.string(forKey: "host") ?? "127.0.0.1"
@@ -307,43 +799,40 @@ final class Manager: ObservableObject {
         if let v = UserDefaults.standard.object(forKey: "cleanupStaleOnStart") as? Bool { return v }
         return true
     }()
+    @Published var simplifyPluginInventory: Bool = {
+        if let value = UserDefaults.standard.object(forKey: "simplifyPluginInventory") as? Bool { return value }
+        return true
+    }()
     @Published var launchAtLogin: Bool = (SMAppService.mainApp.status == .enabled)
     @Published var isInstallingRuntime: Bool = false
-    @Published var remoteEnabled: Bool = UserDefaults.standard.bool(forKey: "remoteEnabled")
-    @Published var remotePort: Int = {
-        let value = UserDefaults.standard.integer(forKey: "remotePort")
-        return value == 0 ? 3081 : value
-    }()
-    @Published var remoteRunning: Bool = false
-    @Published var remoteToken: String = {
-        if let saved = UserDefaults.standard.string(forKey: "remoteToken"), saved.count >= 16 { return saved }
-        let token = makeRemoteToken()
-        UserDefaults.standard.set(token, forKey: "remoteToken")
-        return token
+    @Published var localModelState: LocalModelState = .stopped
+    @Published var localModelName: String = UserDefaults.standard.string(forKey: "localModelName") ?? "本地模型"
+    @Published var localModelStartExecutable: String = UserDefaults.standard.string(forKey: "localModelStartExecutable") ?? ""
+    @Published var localModelStartArguments: String = UserDefaults.standard.string(forKey: "localModelStartArguments") ?? ""
+    @Published var localModelStopExecutable: String = UserDefaults.standard.string(forKey: "localModelStopExecutable") ?? ""
+    @Published var localModelStopArguments: String = UserDefaults.standard.string(forKey: "localModelStopArguments") ?? ""
+    @Published var localModelHealthURL: String = UserDefaults.standard.string(forKey: "localModelHealthURL") ?? ""
+    @Published var stopLocalModelOnQuit: Bool = {
+        if let value = UserDefaults.standard.object(forKey: "stopLocalModelOnQuit") as? Bool { return value }
+        return true
     }()
 
     private var proc: Process?
     private var installProc: Process?
+    private var localModelProc: Process?
+    private var localModelStopProc: Process?
+    private var localModelStartDeadline: Date?
     private var readyTimer: Timer?
     private var watchTimer: Timer?
-    private var remoteCommandTimer: Timer?
     private var logLines: [String] = []
     private var pendingRestart = false
     private var warnedBusy = false
     private var lastHealthCheck: Date?
     private var healthFailStreak = 0
-    private var remoteProc: Process?
-    private var remoteConfigurationRestart: DispatchWorkItem?
-    private var remoteRestartAfterExternalStop = false
 
     var url: URL {
         URL(string: "http://\(host):\(port)") ?? URL(string: "http://127.0.0.1:3080")!
     }
-    var remoteAddress: String { localNetworkAddress() ?? "127.0.0.1" }
-    var remotePairingURL: URL? {
-        URL(string: "http://\(remoteAddress):\(remotePort)/__remote/pair?token=\(remoteToken)")
-    }
-    var remoteDashboardURL: URL? { URL(string: "http://\(remoteAddress):\(remotePort)/__remote/") }
     /// 是否由本应用托管了子进程
     var ownsProcess: Bool { proc != nil }
     /// 是否可以点击「启动」
@@ -351,16 +840,36 @@ final class Manager: ObservableObject {
         if case .stopped = state { return !dshPath.isEmpty }
         return false
     }
+    var localModelDisplayName: String {
+        let trimmed = localModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "本地模型" : trimmed
+    }
+    var localModelStartPath: String { expandedUserPath(localModelStartExecutable) }
+    var localModelStopPath: String { expandedUserPath(localModelStopExecutable) }
+    var canStartLocalModel: Bool {
+        guard FileManager.default.isExecutableFile(atPath: localModelStartPath) else { return false }
+        switch localModelState {
+        case .stopped, .failed: return true
+        case .starting, .ready, .stopping: return false
+        }
+    }
+    var canStopLocalModel: Bool {
+        let hasTrackedProcess = localModelProc?.isRunning == true
+        let hasStopExecutable = FileManager.default.isExecutableFile(atPath: localModelStopPath)
+        guard hasTrackedProcess || hasStopExecutable else { return false }
+        switch localModelState {
+        case .starting, .ready: return true
+        case .stopped, .stopping, .failed: return false
+        }
+    }
+    var canToggleLocalModel: Bool { canStartLocalModel || canStopLocalModel }
 
     private init() {
         watchTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             self?.refreshExternal()
+            self?.refreshLocalModel()
         }
-        remoteCommandTimer = Timer.scheduledTimer(withTimeInterval: 0.75, repeats: true) { [weak self] _ in
-            self?.consumeRemoteCommand()
-            self?.updateRemoteStatus()
-        }
-        if remoteEnabled { DispatchQueue.main.async { [weak self] in self?.startRemoteAccess() } }
+        DispatchQueue.main.async { [weak self] in self?.refreshLocalModel() }
     }
 
     // MARK: 持久化
@@ -373,154 +882,205 @@ final class Manager: ObservableObject {
         d.set(autoStart, forKey: "autoStart")
         d.set(stopOnQuit, forKey: "stopOnQuit")
         d.set(cleanupStaleOnStart, forKey: "cleanupStaleOnStart")
-        d.set(remoteEnabled, forKey: "remoteEnabled")
-        d.set(remotePort, forKey: "remotePort")
-        d.set(remoteToken, forKey: "remoteToken")
+        d.set(simplifyPluginInventory, forKey: "simplifyPluginInventory")
+        d.set(localModelName, forKey: "localModelName")
+        d.set(localModelStartExecutable, forKey: "localModelStartExecutable")
+        d.set(localModelStartArguments, forKey: "localModelStartArguments")
+        d.set(localModelStopExecutable, forKey: "localModelStopExecutable")
+        d.set(localModelStopArguments, forKey: "localModelStopArguments")
+        d.set(localModelHealthURL, forKey: "localModelHealthURL")
+        d.set(stopLocalModelOnQuit, forKey: "stopLocalModelOnQuit")
     }
 
-    // MARK: 手机远程控制
+    // MARK: 本地模型服务
 
-    private var remoteDirectory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("DSH Desktop/Remote", isDirectory: true)
+    private var configuredLocalModelHealthURL: URL? {
+        let value = localModelHealthURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, let url = URL(string: value),
+              url.scheme == "http" || url.scheme == "https" else { return nil }
+        return url
     }
 
-    func setRemoteEnabled(_ enabled: Bool) {
-        remoteEnabled = enabled
-        persist()
-        if !enabled {
-            remoteConfigurationRestart?.cancel()
-            remoteConfigurationRestart = nil
+    private func isLocalModelHealthy(_ url: URL, timeout: TimeInterval = 2) -> Bool {
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        let semaphore = DispatchSemaphore(value: 0)
+        var healthy = false
+        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
+            if let http = response as? HTTPURLResponse {
+                healthy = (100...599).contains(http.statusCode)
+            }
+            semaphore.signal()
         }
-        enabled ? startRemoteAccess() : stopRemoteAccess()
+        task.resume()
+        _ = semaphore.wait(timeout: .now() + timeout + 1)
+        task.cancel()
+        return healthy
     }
 
-    func remoteConfigurationDidChange() {
-        persist()
-        guard remoteEnabled else { return }
-        remoteConfigurationRestart?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.remoteEnabled else { return }
-            self.restartRemoteAccess()
-        }
-        remoteConfigurationRestart = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
-    }
-
-    func regenerateRemoteToken() {
-        remoteToken = makeRemoteToken()
-        persist()
-        if remoteEnabled { restartRemoteAccess() }
-    }
-
-    func restartRemoteAccess() {
-        remoteConfigurationRestart?.cancel()
-        remoteConfigurationRestart = nil
-        stopRemoteAccess()
-        if remoteEnabled { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.startRemoteAccess() } }
-    }
-
-    func startRemoteAccess() {
-        guard remoteEnabled, remoteProc == nil else { return }
-        guard let node = findNodeExecutable() else {
-            appendLog("⚠️ 手机远程控制无法启动：未找到 Node.js")
+    func refreshLocalModel() {
+        guard localModelState != .stopping else { return }
+        guard let healthURL = configuredLocalModelHealthURL else {
+            if localModelProc?.isRunning == true {
+                localModelState = .ready
+            } else if localModelState == .ready {
+                localModelState = .stopped
+            }
             return
         }
-        guard listeningPid(port: remotePort) == nil else {
-            appendLog("⚠️ 手机远程端口 \(remotePort) 已被占用")
-            return
-        }
-        guard let script = Bundle.main.url(forResource: "remote-bridge", withExtension: "js") else {
-            appendLog("⚠️ 手机远程控制组件缺失")
-            return
-        }
-        do {
-            try FileManager.default.createDirectory(at: remoteDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        } catch {
-            appendLog("⚠️ 无法创建手机远程控制目录：\(error.localizedDescription)")
-            return
-        }
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: node)
-        p.arguments = [script.path]
-        var environment = enrichedEnvironment()
-        environment["DSH_REMOTE_PORT"] = "\(remotePort)"
-        environment["DSH_TARGET_HOST"] = "127.0.0.1"
-        environment["DSH_TARGET_PORT"] = "\(port)"
-        environment["DSH_REMOTE_TOKEN"] = remoteToken
-        environment["DSH_REMOTE_DIR"] = remoteDirectory.path
-        p.environment = environment
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError = pipe
-        p.terminationHandler = { [weak self, weak p] _ in
+
+        DispatchQueue.global().async { [weak self] in
+            let healthy = self?.isLocalModelHealthy(healthURL) ?? false
             DispatchQueue.main.async {
-                guard let self, let p, self.remoteProc === p else { return }
-                self.remoteProc = nil
-                self.remoteRunning = false
+                guard let self, self.configuredLocalModelHealthURL == healthURL,
+                      self.localModelState != .stopping else { return }
+                if healthy {
+                    self.localModelStartDeadline = nil
+                    self.localModelState = .ready
+                } else if self.localModelState == .ready, self.localModelProc?.isRunning != true {
+                    self.localModelState = .stopped
+                } else if self.localModelState == .starting,
+                          let deadline = self.localModelStartDeadline,
+                          Date() > deadline {
+                    self.localModelState = .failed("健康检查超时")
+                    self.appendLog("✗ \(self.localModelDisplayName) 未在预期时间内通过健康检查")
+                }
             }
         }
+    }
+
+    func toggleLocalModel() {
+        switch localModelState {
+        case .starting, .ready: stopLocalModel()
+        case .stopped, .failed: startLocalModel()
+        case .stopping: break
+        }
+    }
+
+    func startLocalModel() {
+        persist()
+        guard FileManager.default.isExecutableFile(atPath: localModelStartPath) else {
+            localModelState = .failed("启动程序不存在或不可执行")
+            appendLog("✗ 本地模型启动程序无效：\(localModelStartPath)")
+            return
+        }
+        guard let arguments = parseCommandArguments(localModelStartArguments) else {
+            localModelState = .failed("启动参数中的引号或转义不完整")
+            return
+        }
+        guard canStartLocalModel else { return }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: localModelStartPath)
+        process.arguments = arguments
+        process.currentDirectoryURL = URL(fileURLWithPath: localModelStartPath).deletingLastPathComponent()
+        process.environment = enrichedEnvironment()
+        attachLocalModelOutput(to: process)
+        process.terminationHandler = { [weak self, weak process] finished in
+            let exitCode = finished.terminationStatus
+            DispatchQueue.main.async {
+                guard let self, let process, self.localModelProc === process else { return }
+                self.localModelProc = nil
+                if self.localModelState == .stopping {
+                    self.localModelState = .stopped
+                } else if exitCode != 0 {
+                    self.localModelStartDeadline = nil
+                    self.localModelState = .failed("启动程序退出码 \(exitCode)")
+                    self.appendLog("✗ \(self.localModelDisplayName) 启动程序异常退出（\(exitCode)）")
+                } else if self.configuredLocalModelHealthURL != nil {
+                    self.refreshLocalModel()
+                } else {
+                    self.localModelState = .stopped
+                    self.appendLog("ℹ️ \(self.localModelDisplayName) 启动程序已结束")
+                }
+            }
+        }
+
+        do {
+            localModelState = .starting
+            localModelStartDeadline = configuredLocalModelHealthURL == nil ? nil : Date().addingTimeInterval(120)
+            try process.run()
+            localModelProc = process
+            appendLog("🧠 正在启动 \(localModelDisplayName)…")
+            if configuredLocalModelHealthURL == nil { localModelState = .ready }
+        } catch {
+            localModelStartDeadline = nil
+            localModelState = .failed(error.localizedDescription)
+            appendLog("✗ 无法启动 \(localModelDisplayName)：\(error.localizedDescription)")
+        }
+    }
+
+    func stopLocalModel() {
+        guard canStopLocalModel else { return }
+        localModelState = .stopping
+        localModelStartDeadline = nil
+
+        if let process = localModelProc {
+            localModelProc = nil
+            process.terminationHandler = nil
+            process.terminate()
+        }
+
+        guard FileManager.default.isExecutableFile(atPath: localModelStopPath) else {
+            localModelState = .stopped
+            appendLog("⏹ 已停止 \(localModelDisplayName)")
+            return
+        }
+        guard let arguments = parseCommandArguments(localModelStopArguments) else {
+            localModelState = .failed("停止参数中的引号或转义不完整")
+            return
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: localModelStopPath)
+        process.arguments = arguments
+        process.currentDirectoryURL = URL(fileURLWithPath: localModelStopPath).deletingLastPathComponent()
+        process.environment = enrichedEnvironment()
+        attachLocalModelOutput(to: process)
+        process.terminationHandler = { [weak self, weak process] finished in
+            let exitCode = finished.terminationStatus
+            DispatchQueue.main.async {
+                guard let self, let process, self.localModelStopProc === process else { return }
+                self.localModelStopProc = nil
+                if exitCode == 0 {
+                    self.localModelState = .stopped
+                    self.appendLog("⏹ 已停止 \(self.localModelDisplayName)")
+                } else {
+                    self.localModelState = .failed("停止程序退出码 \(exitCode)")
+                    self.appendLog("✗ \(self.localModelDisplayName) 停止程序异常退出（\(exitCode)）")
+                }
+            }
+        }
+
+        do {
+            try process.run()
+            localModelStopProc = process
+            appendLog("⏹ 正在停止 \(localModelDisplayName)…")
+        } catch {
+            localModelState = .failed(error.localizedDescription)
+            appendLog("✗ 无法停止 \(localModelDisplayName)：\(error.localizedDescription)")
+        }
+    }
+
+    private func attachLocalModelOutput(to process: Process) {
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let output = String(data: data, encoding: .utf8) else { return }
-            DispatchQueue.main.async { self?.appendLog(output.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        }
-        do {
-            try p.run()
-            remoteProc = p
-            remoteRunning = true
-            updateRemoteStatus()
-            appendLog("📱 手机远程控制已开启 → http://\(remoteAddress):\(remotePort)")
-        } catch {
-            appendLog("⚠️ 手机远程控制启动失败：\(error.localizedDescription)")
-        }
-    }
-
-    func stopRemoteAccess() {
-        remoteProc?.terminate()
-        remoteProc = nil
-        remoteRunning = false
-        try? FileManager.default.removeItem(at: remoteDirectory.appendingPathComponent("command.json"))
-    }
-
-    private func consumeRemoteCommand() {
-        guard remoteEnabled else { return }
-        let file = remoteDirectory.appendingPathComponent("command.json")
-        guard let data = try? Data(contentsOf: file),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let action = object["action"] as? String else { return }
-        try? FileManager.default.removeItem(at: file)
-        appendLog("📱 收到手机指令：\(action)")
-        switch action {
-        case "start": if state.canTryStart { start() }
-        case "restart":
-            if ownsProcess {
-                restart()
-            } else if case .externalRunning = state {
-                remoteRestartAfterExternalStop = true
-                killExternal()
+            if data.isEmpty {
+                handle.readabilityHandler = nil
+                return
             }
-        case "stop":
-            if ownsProcess { stop() }
-            else if case .externalRunning = state { killExternal() }
-        default: break
+            guard let output = String(data: data, encoding: .utf8) else { return }
+            let text = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.appendLog("\(self.localModelDisplayName) · \(text)")
+            }
         }
-    }
-
-    private func updateRemoteStatus() {
-        guard remoteEnabled else { return }
-        let snapshot: [String: Any]
-        switch state {
-        case .stopped: snapshot = ["state": "stopped", "label": "已停止", "detail": "可以从手机启动", "controllable": false]
-        case .starting: snapshot = ["state": "starting", "label": "启动中…", "detail": "正在等待 Harness 就绪", "controllable": false]
-        case .running(let pid): snapshot = ["state": "running", "label": "运行中", "detail": "PID \(pid)", "controllable": true]
-        case .externalRunning(let pid): snapshot = ["state": "externalRunning", "label": "外部实例运行中", "detail": "PID \(pid)", "controllable": true]
-        case .stopping: snapshot = ["state": "stopping", "label": "停止中…", "detail": "", "controllable": false]
-        case .failed(let message): snapshot = ["state": "failed", "label": "运行异常", "detail": message, "controllable": false]
-        }
-        guard let data = try? JSONSerialization.data(withJSONObject: snapshot) else { return }
-        try? FileManager.default.createDirectory(at: remoteDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        try? data.write(to: remoteDirectory.appendingPathComponent("status.json"), options: .atomic)
     }
 
     // MARK: 日志
@@ -688,13 +1248,6 @@ final class Manager: ObservableObject {
         let hostHere = host
         guard let pid = pid else {
             warnedBusy = false
-            if remoteRestartAfterExternalStop {
-                remoteRestartAfterExternalStop = false
-                state = .stopped
-                appendLog("📱 外部实例已停止，按手机指令重新启动")
-                start()
-                return
-            }
             if case .externalRunning = state {
                 state = .stopped
                 appendLog("外部实例已退出")
@@ -986,7 +1539,21 @@ final class Manager: ObservableObject {
     /// 退出应用时清理子进程（受「退出时停止服务」开关控制）
     func terminateChild() {
         installProc?.terminate()
-        stopRemoteAccess()
+        localModelStopProc?.terminate()
+        if stopLocalModelOnQuit {
+            localModelProc?.terminate()
+            if FileManager.default.isExecutableFile(atPath: localModelStopPath),
+               let arguments = parseCommandArguments(localModelStopArguments) {
+                let stopProcess = Process()
+                stopProcess.executableURL = URL(fileURLWithPath: localModelStopPath)
+                stopProcess.arguments = arguments
+                stopProcess.currentDirectoryURL = URL(fileURLWithPath: localModelStopPath).deletingLastPathComponent()
+                stopProcess.environment = enrichedEnvironment()
+                stopProcess.standardOutput = FileHandle.nullDevice
+                stopProcess.standardError = FileHandle.nullDevice
+                try? stopProcess.run()
+            }
+        }
         guard stopOnQuit else { return }
         if let p = proc {
             p.terminate()
@@ -1022,20 +1589,286 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - 内嵌 DSH 界面
 
+/// `dsh plugin --profile web add ...` 会把用户安装的 Bundle 记录在这个 profile 的 dependencies 中。
+/// 官方 Base/Web Bundle 由 DSH 运行时提供，不会出现在这里，因此可作为稳定的“用户安装”边界。
+func webProfileUserPluginPackages() -> [String] {
+    let packageURL = dshHomeDirectoryURL()
+        .appendingPathComponent("profiles/web/package.json")
+    guard let data = try? Data(contentsOf: packageURL),
+          let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let dependencies = root["dependencies"] as? [String: Any] else { return [] }
+    return dependencies.keys.sorted()
+}
+
+private func javascriptJSON(_ value: Any, fallback: String) -> String {
+    guard JSONSerialization.isValidJSONObject(value),
+          let data = try? JSONSerialization.data(withJSONObject: value),
+          let result = String(data: data, encoding: .utf8) else { return fallback }
+    return result
+}
+
+/// 在客户端内嵌 Web UI 中把底层 Loader inventory 重排为用户视图。
+/// 只依赖上游明确输出的 data-plugin-entry/data-phase/data-enabled 属性；结构不匹配时不做任何修改。
+func pluginInventoryEnhancementScript(enabled: Bool, userPackages: [String]) -> String {
+    let enabledLiteral = enabled ? "true" : "false"
+    let packagesLiteral = javascriptJSON(userPackages, fallback: "[]")
+    return #"""
+    (() => {
+      const globalKey = "__dshDesktopPluginInventory";
+      const initialEnabled = \#(enabledLiteral);
+      const initialPackages = \#(packagesLiteral);
+      const existing = window[globalKey];
+      if (existing && typeof existing.configure === "function") {
+        existing.configure(initialEnabled, initialPackages);
+        return;
+      }
+
+      const storageKey = "dshDesktop.pluginInventory.mode";
+      let storedMode = "user";
+      try { storedMode = localStorage.getItem(storageKey) || "user"; } catch (_) {}
+      if (!["user", "issues", "all"].includes(storedMode)) storedMode = "user";
+
+      const state = {
+        enabled: initialEnabled,
+        packages: new Set(initialPackages),
+        mode: storedMode,
+      };
+      let scheduled = false;
+
+      function copy() {
+        const language = (document.documentElement.lang || navigator.language || "").toLowerCase();
+        const zh = language.startsWith("zh");
+        return zh ? {
+          user: "用户安装",
+          issues: "异常 / 等待",
+          all: "全部运行单元",
+          headingUser: "用户安装的插件",
+          headingIssues: "需要关注的运行单元",
+          headingAll: "全部运行单元（高级诊断）",
+          emptyUser: "没有识别到用户安装插件贡献的运行单元。",
+          emptyIssues: "当前没有挂载失败、等待依赖或加载中的运行单元。",
+          note: (packages, units, hidden) => `${packages} 个用户包贡献 ${units} 个运行单元；默认隐藏 ${hidden} 个官方/内部运行单元。`,
+        } : {
+          user: "User installed",
+          issues: "Issues / waiting",
+          all: "All runtime units",
+          headingUser: "User-installed plugins",
+          headingIssues: "Runtime units needing attention",
+          headingAll: "All runtime units (advanced diagnostics)",
+          emptyUser: "No runtime units from user-installed plugins were identified.",
+          emptyIssues: "No runtime units are failed, waiting for dependencies, or loading.",
+          note: (packages, units, hidden) => `${packages} user packages contribute ${units} runtime units; ${hidden} official/internal units are hidden by default.`,
+        };
+      }
+
+      function isUserModule(moduleName) {
+        for (const packageName of state.packages) {
+          if (moduleName === packageName || moduleName.startsWith(`${packageName}/`)) return true;
+        }
+        return false;
+      }
+
+      function facts(card) {
+        const title = card.querySelector("strong[title]");
+        const moduleName = title ? (title.getAttribute("title") || "") : "";
+        const phaseNode = card.querySelector("[data-phase]");
+        const phase = phaseNode ? phaseNode.getAttribute("data-phase") : "unobserved";
+        const enabledNode = card.querySelector("[data-enabled]");
+        const configured = enabledNode && enabledNode.getAttribute("data-enabled") === "true";
+        const issue = configured && ["failed", "pending", "loading", "unloading", "unobserved"].includes(phase || "unobserved");
+        return { card, moduleName, user: isUserModule(moduleName), issue };
+      }
+
+      function setText(node, value) {
+        if (node && node.textContent !== String(value)) node.textContent = String(value);
+      }
+
+      function makeControls(catalog, list) {
+        let controls = Array.from(catalog.children).find((node) => node.hasAttribute && node.hasAttribute("data-dsh-desktop-inventory-controls"));
+        if (controls) return controls;
+
+        controls = document.createElement("div");
+        controls.setAttribute("data-dsh-desktop-inventory-controls", "true");
+        const choices = document.createElement("div");
+        choices.setAttribute("data-dsh-desktop-inventory-choices", "true");
+        for (const mode of ["user", "issues", "all"]) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.setAttribute("data-dsh-desktop-mode", mode);
+          const label = document.createElement("span");
+          label.setAttribute("data-dsh-desktop-label", "true");
+          const count = document.createElement("span");
+          count.setAttribute("data-dsh-desktop-count", "true");
+          button.append(label, count);
+          button.addEventListener("click", () => {
+            state.mode = mode;
+            try { localStorage.setItem(storageKey, mode); } catch (_) {}
+            schedule();
+          });
+          choices.appendChild(button);
+        }
+        const note = document.createElement("p");
+        note.setAttribute("data-dsh-desktop-inventory-note", "true");
+        const empty = document.createElement("p");
+        empty.setAttribute("data-dsh-desktop-inventory-empty", "true");
+        empty.hidden = true;
+        controls.append(choices, note, empty);
+
+        const heading = catalog.querySelector("[data-plugin-count]")?.parentElement;
+        catalog.insertBefore(controls, heading || list);
+        return controls;
+      }
+
+      function restoreUpstream(catalog, list) {
+        for (const card of Array.from(list.children)) {
+          if (card.matches && card.matches("li[data-plugin-entry]")) card.hidden = false;
+        }
+        const controls = Array.from(catalog.children).find((node) => node.hasAttribute && node.hasAttribute("data-dsh-desktop-inventory-controls"));
+        if (controls) controls.hidden = true;
+        const count = catalog.querySelector("[data-plugin-count]");
+        const heading = count ? count.parentElement?.querySelector("h3") : null;
+        if (heading && heading.dataset.dshDesktopOriginalHeading) setText(heading, heading.dataset.dshDesktopOriginalHeading);
+        const cards = Array.from(list.children).filter((node) => node.matches && node.matches("li[data-plugin-entry]"));
+        setText(count, cards.length);
+      }
+
+      function applyList(list) {
+        const catalog = list.parentElement;
+        if (!catalog) return;
+        if (!state.enabled) {
+          restoreUpstream(catalog, list);
+          return;
+        }
+
+        const labels = copy();
+        const rows = Array.from(list.children)
+          .filter((node) => node.matches && node.matches("li[data-plugin-entry]"))
+          .map(facts);
+        const userCount = rows.filter((row) => row.user).length;
+        const issueCount = rows.filter((row) => row.issue).length;
+        const internalCount = rows.filter((row) => !row.user).length;
+        let visibleCount = 0;
+        for (const row of rows) {
+          const visible = state.mode === "all" || (state.mode === "user" ? row.user : row.issue);
+          row.card.hidden = !visible;
+          if (visible) visibleCount += 1;
+        }
+
+        const controls = makeControls(catalog, list);
+        controls.hidden = false;
+        for (const button of controls.querySelectorAll("button[data-dsh-desktop-mode]")) {
+          const mode = button.getAttribute("data-dsh-desktop-mode");
+          button.setAttribute("aria-pressed", mode === state.mode ? "true" : "false");
+          const label = button.querySelector("[data-dsh-desktop-label]");
+          const count = button.querySelector("[data-dsh-desktop-count]");
+          setText(label, labels[mode]);
+          setText(count, mode === "user" ? userCount : (mode === "issues" ? issueCount : rows.length));
+        }
+        setText(
+          controls.querySelector("[data-dsh-desktop-inventory-note]"),
+          labels.note(state.packages.size, userCount, internalCount)
+        );
+        const empty = controls.querySelector("[data-dsh-desktop-inventory-empty]");
+        if (empty) {
+          empty.hidden = visibleCount !== 0;
+          setText(empty, state.mode === "issues" ? labels.emptyIssues : labels.emptyUser);
+        }
+
+        const count = catalog.querySelector("[data-plugin-count]");
+        const heading = count ? count.parentElement?.querySelector("h3") : null;
+        if (heading && !heading.dataset.dshDesktopOriginalHeading) heading.dataset.dshDesktopOriginalHeading = heading.textContent || "";
+        setText(heading, state.mode === "user" ? labels.headingUser : (state.mode === "issues" ? labels.headingIssues : labels.headingAll));
+        setText(count, visibleCount);
+      }
+
+      function apply() {
+        scheduled = false;
+        const lists = new Set();
+        for (const card of document.querySelectorAll("li[data-plugin-entry]")) {
+          if (card.parentElement) lists.add(card.parentElement);
+        }
+        for (const list of lists) applyList(list);
+      }
+
+      function schedule() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(apply);
+      }
+
+      const style = document.createElement("style");
+      style.setAttribute("data-dsh-desktop-plugin-inventory", "true");
+      style.textContent = `
+        [data-dsh-desktop-inventory-controls] { display:flex; flex-direction:column; gap:8px; padding:10px; border:1px solid var(--dsw-alias-border-l2); border-radius:10px; background:var(--dsw-alias-bg-layer-1); }
+        [data-dsh-desktop-inventory-controls][hidden], li[data-plugin-entry][hidden], [data-dsh-desktop-inventory-empty][hidden] { display:none !important; }
+        [data-dsh-desktop-inventory-choices] { display:flex; flex-wrap:wrap; gap:7px; }
+        [data-dsh-desktop-inventory-choices] button { border:1px solid var(--dsw-alias-border-l2); color:var(--dsw-alias-label-secondary); background:var(--dsw-alias-bg-layer-3); min-height:30px; border-radius:7px; padding:4px 10px; font:inherit; font-size:12px; cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+        [data-dsh-desktop-inventory-choices] button:hover { background:var(--dsw-alias-interactive-bg-hover); }
+        [data-dsh-desktop-inventory-choices] button[aria-pressed=true] { border-color:var(--dsw-alias-state-business-primary); color:var(--dsw-alias-state-business-primary); background:color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
+        [data-dsh-desktop-count] { min-width:18px; padding:0 5px; border-radius:999px; text-align:center; font-variant-numeric:tabular-nums; background:var(--dsw-alias-bg-module-platform); }
+        [data-dsh-desktop-inventory-note], [data-dsh-desktop-inventory-empty] { margin:0; color:var(--dsw-alias-label-tertiary); font-size:12px; line-height:18px; }
+        [data-dsh-desktop-inventory-empty] { padding:10px 2px 2px; }
+      `;
+      document.head.appendChild(style);
+
+      const observer = new MutationObserver(schedule);
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-phase", "data-enabled", "title"],
+      });
+
+      window[globalKey] = {
+        configure(nextEnabled, nextPackages) {
+          state.enabled = Boolean(nextEnabled);
+          state.packages = new Set(Array.isArray(nextPackages) ? nextPackages : []);
+          schedule();
+        },
+        refresh: schedule,
+      };
+      schedule();
+    })();
+    """#
+}
+
+private func pluginInventoryPreferenceScript(enabled: Bool, userPackages: [String]) -> String {
+    let enabledLiteral = enabled ? "true" : "false"
+    let packagesLiteral = javascriptJSON(userPackages, fallback: "[]")
+    return "window.__dshDesktopPluginInventory?.configure(\(enabledLiteral), \(packagesLiteral));"
+}
+
 struct WebView: NSViewRepresentable {
     let url: URL
+    let simplifyPluginInventory: Bool
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let packages = webProfileUserPluginPackages()
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: pluginInventoryEnhancementScript(
+                enabled: simplifyPluginInventory,
+                userPackages: packages
+            ),
+            injectionTime: .atDocumentEnd,
+            forMainFrameOnly: true
+        ))
+        let web = WKWebView(frame: .zero, configuration: configuration)
         web.navigationDelegate = context.coordinator
         context.coordinator.lastURL = url
+        context.coordinator.simplifyPluginInventory = simplifyPluginInventory
+        context.coordinator.userPluginPackages = packages
         web.load(URLRequest(url: url))
         return web
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        let packages = webProfileUserPluginPackages()
+        context.coordinator.simplifyPluginInventory = simplifyPluginInventory
+        context.coordinator.userPluginPackages = packages
+        context.coordinator.applyPluginInventoryPreferences(to: nsView)
         guard context.coordinator.lastURL != url else { return }
         context.coordinator.lastURL = url
         nsView.load(URLRequest(url: url))
@@ -1043,6 +1876,19 @@ struct WebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate {
         var lastURL: URL?
+        var simplifyPluginInventory = true
+        var userPluginPackages: [String] = []
+
+        func applyPluginInventoryPreferences(to webView: WKWebView) {
+            webView.evaluateJavaScript(pluginInventoryPreferenceScript(
+                enabled: simplifyPluginInventory,
+                userPackages: userPluginPackages
+            ))
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            applyPluginInventoryPreferences(to: webView)
+        }
 
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
@@ -1061,18 +1907,22 @@ struct WebView: NSViewRepresentable {
 // MARK: - 主界面
 
 struct ContentView: View {
-    @ObservedObject private var mgr = Manager.shared
-    @State private var showSettings = false
-    @State private var confirmKillExternal = false
-    @State private var showRemoteAccess = false
+    // 全局共享的一个manager实例，dsh状态、日志、端口、dsh路径、启动停止方法
+    @ObservedObject private var mgr = Manager.shared // boserveobject是告诉界面观察这个对象，属性变化需要重新计算界面
+    @State private var showSettings = false // 是否显示设置
+    @State private var showArchiveManager = false // 是否显示归档管理
+    @State private var confirmKillExternal = false // 是否显示停止确认框
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-            ZStack {
-                if mgr.state.webReady {
-                    WebView(url: mgr.url)
+        VStack(spacing: 0) { // 垂直排列
+            toolbar // 工具栏
+            Divider() // 分割线
+            ZStack { // 主要内容，zstack 重叠容器
+                if mgr.state.webReady { // if else 只显示一个界面，检查mgr状态，可访问/不可访问
+                    WebView(
+                        url: mgr.url,
+                        simplifyPluginInventory: mgr.simplifyPluginInventory
+                    )
                 } else {
                     placeholderView
                 }
@@ -1084,8 +1934,8 @@ struct ContentView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView()
         }
-        .sheet(isPresented: $showRemoteAccess) {
-            RemoteAccessView()
+        .sheet(isPresented: $showArchiveManager) {
+            ArchiveManagerView()
         }
         .alert("停止外部实例", isPresented: $confirmKillExternal) {
             Button("停止", role: .destructive) { mgr.killExternal() }
@@ -1124,6 +1974,14 @@ struct ContentView: View {
             }
             .disabled(!mgr.ownsProcess)
 
+            Divider().frame(height: 18)
+
+            Button(action: { mgr.toggleLocalModel() }) {
+                Label(localModelButtonText, systemImage: localModelSystemImage)
+            }
+            .disabled(!mgr.canToggleLocalModel)
+            .help(localModelHelpText)
+
             Button(action: { NSWorkspace.shared.open(mgr.url) }) {
                 Label("系统浏览器", systemImage: "safari")
             }
@@ -1138,9 +1996,11 @@ struct ContentView: View {
 
             Divider().frame(height: 18)
 
-            Button(action: { showRemoteAccess = true }) {
-                Label("手机", systemImage: "iphone.gen3")
+            Button(action: { showArchiveManager = true }) {
+                Label("归档管理", systemImage: "archivebox")
+                    .labelStyle(.iconOnly)
             }
+            .help("查看、恢复或清理已归档会话")
 
             Button(action: { showSettings = true }) {
                 Label("设置", systemImage: "gearshape")
@@ -1170,6 +2030,40 @@ struct ContentView: View {
         case .starting, .stopping: return .orange
         case .running, .externalRunning: return .green
         case .failed: return .red
+        }
+    }
+
+    private var localModelButtonText: String {
+        switch mgr.localModelState {
+        case .stopped, .failed: return "启动模型"
+        case .starting, .ready: return "停止模型"
+        case .stopping: return "停止中…"
+        }
+    }
+
+    private var localModelSystemImage: String {
+        switch mgr.localModelState {
+        case .stopped: return "cpu"
+        case .starting: return "hourglass"
+        case .ready: return "stop.circle.fill"
+        case .stopping: return "hourglass"
+        case .failed: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var localModelHelpText: String {
+        if mgr.localModelStartExecutable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请先在设置中配置本地模型启动程序"
+        }
+        switch mgr.localModelState {
+        case .stopped: return "启动 \(mgr.localModelDisplayName)"
+        case .starting: return mgr.canStopLocalModel ? "模型正在启动；点击停止" : "模型正在启动"
+        case .ready:
+            return mgr.canStopLocalModel
+                ? "\(mgr.localModelDisplayName) 已就绪；点击停止"
+                : "模型已就绪；配置停止程序后可从此处停止"
+        case .stopping: return "正在停止 \(mgr.localModelDisplayName)"
+        case .failed(let message): return "本地模型异常：\(message)"
         }
     }
 
@@ -1224,100 +2118,240 @@ struct ContentView: View {
     }
 }
 
-// MARK: - 手机远程控制
+// MARK: - 归档管理
 
-struct QRCodeView: View {
-    let value: String
+private enum ArchiveConfirmation: Identifiable {
+    case delete(ArchivedConversation)
+    case deleteAll(Int)
+    case stopExternal(Int32)
 
-    var body: some View {
-        if let image = makeImage() {
-            Image(nsImage: image)
-                .interpolation(.none)
-                .resizable()
-                .frame(width: 196, height: 196)
-                .padding(10)
-                .background(Color.white)
-                .cornerRadius(16)
+    var id: String {
+        switch self {
+        case .delete(let conversation): return "delete-\(conversation.id)"
+        case .deleteAll: return "delete-all"
+        case .stopExternal(let pid): return "stop-external-\(pid)"
         }
-    }
-
-    private func makeImage() -> NSImage? {
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(value.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 10, y: 10)) else { return nil }
-        let representation = NSCIImageRep(ciImage: output)
-        let image = NSImage(size: representation.size)
-        image.addRepresentation(representation)
-        return image
     }
 }
 
-struct RemoteAccessView: View {
+struct ArchiveManagerView: View {
+    @StateObject private var store = ArchiveStore()
     @ObservedObject private var mgr = Manager.shared
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmation: ArchiveConfirmation?
+
+    private var serviceActive: Bool {
+        mgr.ownsProcess || mgr.state.portActive
+    }
 
     var body: some View {
-        VStack(spacing: 18) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("手机远程控制").font(.title2).bold()
-                    Text("像 Codex Mobile 一样，在手机浏览器控制这台电脑上的 DSH")
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Toggle("", isOn: Binding(get: { mgr.remoteEnabled }, set: { mgr.setRemoteEnabled($0) }))
-                    .toggleStyle(.switch)
-            }
-
-            if mgr.remoteEnabled {
-                if mgr.remoteRunning, let pairing = mgr.remotePairingURL {
-                    QRCodeView(value: pairing.absoluteString)
-                    VStack(spacing: 7) {
-                        Label("桥接服务已运行", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        Text("手机与电脑连接同一 Wi-Fi 后扫码")
-                            .font(.headline)
-                        Text("也可以在手机打开：\(mgr.remoteDashboardURL?.absoluteString ?? "")")
-                            .font(.system(.caption, design: .monospaced))
-                            .foregroundColor(.secondary)
-                            .textSelection(.enabled)
-                    }
-                    HStack {
-                        Button("在本机预览") {
-                            if let url = mgr.remotePairingURL { NSWorkspace.shared.open(url) }
-                        }
-                        Button("复制配对链接") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(pairing.absoluteString, forType: .string)
-                        }
-                        Button("重置配对", role: .destructive) { mgr.regenerateRemoteToken() }
-                    }
-                    Text("完整 DSH 仍只监听本机；手机流量经过带配对会话的代理。若要在外网使用，请让电脑和手机加入同一个 Tailscale 网络。")
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("归档管理").font(.title2).bold()
+                    Text("数据目录：\(store.displayDataRoot)")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 500)
-                } else {
-                    ProgressView("正在启动手机桥接服务…")
-                    Button("重试") { mgr.startRemoteAccess() }
+                        .textSelection(.enabled)
                 }
-            } else {
-                Image(systemName: "iphone.slash")
-                    .font(.system(size: 42))
-                    .foregroundColor(.secondary)
-                Text("开启后会在局域网端口 \(mgr.remotePort) 提供带配对保护的手机入口。")
-                    .foregroundColor(.secondary)
+                Spacer()
+                Button(action: { store.reload() }) {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+                .disabled(store.isLoading || store.isBusy)
             }
 
+            if serviceActive {
+                HStack(spacing: 10) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .foregroundColor(.orange)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("管理前需要停止 DSH 服务").fontWeight(.medium)
+                        Text("运行中的 DSH 会把内存状态重新写回索引，因此恢复和删除按钮暂时不可用。")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    if mgr.ownsProcess {
+                        Button("停止服务") { mgr.stop() }
+                            .disabled(mgr.state == .stopping)
+                    } else if case .externalRunning(let pid) = mgr.state {
+                        Button("停止外部实例") { confirmation = .stopExternal(pid) }
+                    }
+                }
+                .padding(10)
+                .background(Color.orange.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill").foregroundColor(.green)
+                    Text("DSH 服务已停止，可以安全管理归档。")
+                        .font(.callout)
+                    Spacer()
+                    if mgr.canStart {
+                        Button("启动 DSH") { mgr.start() }
+                    }
+                }
+            }
+
+            GroupBox {
+                ZStack {
+                    if store.isLoading {
+                        VStack(spacing: 10) {
+                            ProgressView()
+                            Text("正在读取归档会话…").foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if store.items.isEmpty {
+                        VStack(spacing: 9) {
+                            Image(systemName: "archivebox")
+                                .font(.system(size: 34))
+                                .foregroundColor(.secondary)
+                            Text("暂无归档会话").font(.headline)
+                            Text("DSH 中归档的会话会显示在这里。")
+                                .font(.callout)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        List(store.items) { conversation in
+                            archiveRow(conversation)
+                        }
+                        .listStyle(.inset)
+                    }
+
+                    if store.isBusy {
+                        Color.black.opacity(0.08)
+                        ProgressView("正在更新归档…")
+                            .padding(14)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                    }
+                }
+                .frame(minHeight: 360)
+            } label: {
+                Label(archiveSummary, systemImage: "tray.full")
+            }
+
+            if let error = store.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundColor(.red)
+                    .textSelection(.enabled)
+            } else if let status = store.statusMessage {
+                Label(status, systemImage: "checkmark.circle.fill")
+                    .font(.callout)
+                    .foregroundColor(.green)
+                    .textSelection(.enabled)
+            }
+
+            Text("“恢复”只取消隐藏标记；“永久删除”会先备份索引，再将日志目录移到 macOS 废纸篓。清空废纸篓后日志才不可恢复。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
             HStack {
+                Button(role: .destructive) {
+                    confirmation = .deleteAll(store.items.count)
+                } label: {
+                    Label("清空全部归档", systemImage: "trash")
+                }
+                .disabled(store.items.isEmpty || serviceActive || store.isBusy)
+
                 Spacer()
-                Button("完成") { dismiss() }.keyboardShortcut(.defaultAction)
+                Button("完成") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(22)
-        .frame(width: 600)
-        .frame(minHeight: 510)
+        .padding(18)
+        .frame(width: 760)
+        .frame(minHeight: 570)
+        .onAppear { store.reload() }
+        .alert(item: $confirmation) { prompt in
+            switch prompt {
+            case .delete(let conversation):
+                return Alert(
+                    title: Text("永久删除这条归档？"),
+                    message: Text("“\(conversation.title)”的日志将移到废纸篓，并从 DSH 索引中移除。操作前会自动备份索引。"),
+                    primaryButton: .destructive(Text("移到废纸篓")) {
+                        store.delete(conversation, servicePort: mgr.port)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .deleteAll(let count):
+                return Alert(
+                    title: Text("清空全部归档？"),
+                    message: Text("将从 DSH 索引中移除 \(count) 条归档，并把找到的日志目录移到废纸篓。操作前会自动备份索引。"),
+                    primaryButton: .destructive(Text("清空归档")) {
+                        store.deleteAll(servicePort: mgr.port)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .stopExternal(let pid):
+                return Alert(
+                    title: Text("停止外部 DSH 实例？"),
+                    message: Text("将向不是由本客户端启动的 dsh 进程（pid \(pid)）发送终止信号。"),
+                    primaryButton: .destructive(Text("停止")) { mgr.killExternal() },
+                    secondaryButton: .cancel()
+                )
+            }
+        }
+    }
+
+    private var archiveSummary: String {
+        let size = ByteCountFormatter.string(fromByteCount: store.totalByteCount, countStyle: .file)
+        return "已归档 \(store.items.count) 条 · 日志 \(size)"
+    }
+
+    @ViewBuilder
+    private func archiveRow(_ conversation: ArchivedConversation) -> some View {
+        HStack(alignment: .top, spacing: 11) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .foregroundColor(.secondary)
+                .frame(width: 20, height: 24)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(conversation.title)
+                    .fontWeight(.medium)
+                    .lineLimit(2)
+                if let cwd = conversation.cwd, !cwd.isEmpty {
+                    Text(cwd)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                HStack(spacing: 8) {
+                    Text(conversation.id)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    if let date = conversation.updatedAt ?? conversation.createdAt {
+                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    Text(ByteCountFormatter.string(fromByteCount: conversation.byteCount, countStyle: .file))
+                    if conversation.directoryURL == nil {
+                        Text("未找到 JSONL 日志").foregroundColor(.orange)
+                    }
+                }
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            }
+
+            Spacer(minLength: 12)
+
+            Button("恢复") {
+                store.restore(conversation, servicePort: mgr.port)
+            }
+            .disabled(serviceActive || store.isBusy)
+
+            Button(role: .destructive) {
+                confirmation = .delete(conversation)
+            } label: {
+                Text("删除")
+            }
+            .disabled(serviceActive || store.isBusy)
+        }
+        .padding(.vertical, 5)
     }
 }
 
@@ -1364,6 +2398,13 @@ struct SettingsView: View {
                         Spacer()
                     }
                     HStack(spacing: 12) {
+                        Toggle("简化内嵌 Web UI 的插件列表", isOn: $mgr.simplifyPluginInventory)
+                        Spacer()
+                        Text("默认只显示用户安装；异常与全部运行单元仍可切换")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    HStack(spacing: 12) {
                         Text("dsh 路径:")
                         TextField("", text: $mgr.dshPath)
                             .font(.system(.body, design: .monospaced))
@@ -1393,17 +2434,56 @@ struct SettingsView: View {
                 .padding(4)
             }
 
-            GroupBox(label: Label("手机远程控制", systemImage: "iphone.gen3")) {
-                HStack(spacing: 12) {
-                    Toggle("启用手机桥接", isOn: Binding(get: { mgr.remoteEnabled }, set: { mgr.setRemoteEnabled($0) }))
-                    Text("端口:")
-                    TextField("3081", value: $mgr.remotePort, formatter: portFormatter)
-                        .frame(width: 80)
-                    Text(mgr.remoteRunning ? "● 已运行" : "○ 未运行")
-                        .foregroundColor(mgr.remoteRunning ? .green : .secondary)
-                    Spacer()
-                    Button("重启桥接") { mgr.restartRemoteAccess() }
-                        .disabled(!mgr.remoteEnabled)
+            GroupBox(label: Label("本地模型服务", systemImage: "cpu")) {
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(spacing: 10) {
+                        Text("名称:").frame(width: 86, alignment: .trailing)
+                        TextField("例如：Qwen 27B", text: $mgr.localModelName)
+                    }
+                    HStack(spacing: 10) {
+                        Text("启动程序:").frame(width: 86, alignment: .trailing)
+                        TextField("可执行文件或脚本路径", text: $mgr.localModelStartExecutable)
+                            .font(.system(.body, design: .monospaced))
+                        Button("浏览…") { pickLocalModelExecutable(forStop: false) }
+                        Text(FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath) ? "✓" : "✗")
+                            .foregroundColor(FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath) ? .green : .red)
+                    }
+                    HStack(spacing: 10) {
+                        Text("启动参数:").frame(width: 86, alignment: .trailing)
+                        TextField("例如：--port 8000 --model \"/路径/模型\"", text: $mgr.localModelStartArguments)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    HStack(spacing: 10) {
+                        Text("停止程序:").frame(width: 86, alignment: .trailing)
+                        TextField("可选；后台服务建议配置 stop.sh", text: $mgr.localModelStopExecutable)
+                            .font(.system(.body, design: .monospaced))
+                        Button("浏览…") { pickLocalModelExecutable(forStop: true) }
+                    }
+                    HStack(spacing: 10) {
+                        Text("停止参数:").frame(width: 86, alignment: .trailing)
+                        TextField("可选", text: $mgr.localModelStopArguments)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    HStack(spacing: 10) {
+                        Text("健康检查:").frame(width: 86, alignment: .trailing)
+                        TextField("可选，例如 http://127.0.0.1:<端口>/health", text: $mgr.localModelHealthURL)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(localModelStatusColor)
+                            .frame(width: 9, height: 9)
+                        Text(localModelStatusText)
+                        Spacer()
+                        Toggle("退出应用时停止本地模型", isOn: $mgr.stopLocalModelOnQuit)
+                        Button(mgr.localModelState == .starting || mgr.localModelState == .ready ? "停止" : "启动") {
+                            mgr.toggleLocalModel()
+                        }
+                        .disabled(!mgr.canToggleLocalModel)
+                    }
+                    Text("程序将直接以当前用户权限运行；参数不会经过 Shell，也不支持管道、重定向或命令替换。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 .padding(4)
             }
@@ -1440,14 +2520,21 @@ struct SettingsView: View {
             }
         }
         .padding(18)
-        .frame(width: 640)
-        .onChange(of: mgr.port) { _ in mgr.remoteConfigurationDidChange(); mgr.refreshExternal() }
+        .frame(width: 720)
+        .onChange(of: mgr.port) { _ in mgr.persist(); mgr.refreshExternal() }
         .onChange(of: mgr.host) { _ in mgr.persist() }
         .onChange(of: mgr.dshPath) { _ in mgr.persist() }
         .onChange(of: mgr.autoStart) { _ in mgr.persist() }
         .onChange(of: mgr.stopOnQuit) { _ in mgr.persist() }
         .onChange(of: mgr.cleanupStaleOnStart) { _ in mgr.persist() }
-        .onChange(of: mgr.remotePort) { _ in mgr.remoteConfigurationDidChange() }
+        .onChange(of: mgr.simplifyPluginInventory) { _ in mgr.persist() }
+        .onChange(of: mgr.localModelName) { _ in mgr.persist() }
+        .onChange(of: mgr.localModelStartExecutable) { _ in mgr.persist(); mgr.refreshLocalModel() }
+        .onChange(of: mgr.localModelStartArguments) { _ in mgr.persist() }
+        .onChange(of: mgr.localModelStopExecutable) { _ in mgr.persist() }
+        .onChange(of: mgr.localModelStopArguments) { _ in mgr.persist() }
+        .onChange(of: mgr.localModelHealthURL) { _ in mgr.persist(); mgr.refreshLocalModel() }
+        .onChange(of: mgr.stopLocalModelOnQuit) { _ in mgr.persist() }
         .alert("停止外部实例", isPresented: $confirmKillExternal) {
             Button("停止", role: .destructive) { mgr.killExternal() }
             Button("取消", role: .cancel) {}
@@ -1467,18 +2554,54 @@ struct SettingsView: View {
             mgr.persist()
         }
     }
+
+    private var localModelStatusText: String {
+        switch mgr.localModelState {
+        case .stopped: return "未运行"
+        case .starting: return "正在启动 \(mgr.localModelDisplayName)…"
+        case .ready: return "\(mgr.localModelDisplayName) 已就绪"
+        case .stopping: return "正在停止…"
+        case .failed(let message): return "异常：\(message)"
+        }
+    }
+
+    private var localModelStatusColor: Color {
+        switch mgr.localModelState {
+        case .stopped: return .gray
+        case .starting, .stopping: return .orange
+        case .ready: return .green
+        case .failed: return .red
+        }
+    }
+
+    private func pickLocalModelExecutable(forStop: Bool) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = forStop ? "选择停止程序" : "选择启动程序"
+        panel.message = "请选择可信的可执行文件或带有执行权限的脚本"
+        if panel.runModal() == .OK, let url = panel.url {
+            if forStop {
+                mgr.localModelStopExecutable = url.path
+            } else {
+                mgr.localModelStartExecutable = url.path
+            }
+            mgr.persist()
+            mgr.refreshLocalModel()
+        }
+    }
 }
 
 // MARK: - 应用入口
 
-@main
-struct DSHLauncherApp: App {
+@main  // 告诉程序启动入口
+struct DSHLauncherApp: App {  // 定义一个结构体，遵循swiftui的app协议，这儿逻辑不是继承，更像是一种声明的实现
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    var body: some Scene {
-        WindowGroup("DSH Desktop") {
-            ContentView()
+    // 层级：app-scene（窗口、设置窗口、菜单栏）-view（页面中的具体界面）-text、button、image
+    var body: some Scene {  // 计算属性（类似于无参函数），返回一个secne协议的类型
+        WindowGroup("DSH Desktop Community") {  //声明一组应用窗口，并制定窗口显示什么
+            ContentView() // 创建一个contentview结构体实例
         }
-        .windowResizability(.contentMinSize)
+        .windowResizability(.contentMinSize) // 限制窗口的最小尺寸
     }
 }

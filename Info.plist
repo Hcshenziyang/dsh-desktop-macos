@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleName</key>
-	<string>DSH Desktop</string>
+	<string>DSH Desktop Community</string>
 	<key>CFBundleDisplayName</key>
-	<string>DSH Desktop</string>
+	<string>DSH Desktop Community</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.fangchen.dsh-launcher</string>
+	<string>io.github.dramtea.dsh-desktop-community</string>
 	<key>CFBundleExecutable</key>
 	<string>DSHLauncher</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.2.0</string>
+	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
@@ -27,7 +27,7 @@
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Fang Chen</string>
+	<string>Original © 2026 Fang Chen; modifications © 2026 dramtea and contributors</string>
 	<key>LSUIElement</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
