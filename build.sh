@@ -77,7 +77,7 @@ for arch in $ARCHS; do
             -sdk "$sdk" \
             -target "${arch}-apple-macosx${MACOS_MIN}" \
             -framework SwiftUI -framework AppKit -framework WebKit \
-            -o "$binary" Sources/DSHLauncher.swift; then
+            -o "$binary" Sources/*.swift; then
             compiled=true
             break
         fi

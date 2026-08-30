@@ -1,0 +1,7 @@
+{
+  "defaultWorkspaceType": "swiftPM",
+  "swiftPM": {
+    "scratchPath": ".sourcekit-lsp-build"
+  },
+  "backgroundIndexing": true
+}

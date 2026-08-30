@@ -116,13 +116,19 @@ Web UI 组件也会平铺在同一列表中。客户端默认对**内嵌 Web UI*
 ## 项目结构
 
 ```text
-Sources/DSHLauncher.swift  macOS 生命周期、SwiftUI 界面与嵌入式 Web UI
-Resources/AppIcon.icns     App 图标资源
-Info.plist                 macOS Bundle 元数据
-build.sh                   通用 macOS App 构建脚本
-script/build_and_run.sh    本地构建、启动和调试入口
-scripts/package.sh         ZIP、DMG 与校验文件打包脚本
-.github/workflows/         macOS CI 与 Release 工作流
+Sources/DSHLauncherApp.swift  应用入口与 macOS 生命周期
+Sources/Manager.swift         DSH、本地模型与进程管理
+Sources/MainViews.swift       主界面与设置界面
+Sources/Archive.swift         归档数据、管理逻辑与界面
+Sources/WebView.swift         内嵌 Web UI 与插件列表增强
+Package.swift                 SwiftPM 模块描述，用于编辑器索引与跨文件跳转
+.sourcekit-lsp/config.json    SourceKit-LSP 索引配置
+Resources/AppIcon.icns        App 图标资源
+Info.plist                    macOS Bundle 元数据
+build.sh                      通用 macOS App 构建脚本
+script/build_and_run.sh       本地构建、启动和调试入口
+scripts/package.sh            ZIP、DMG 与校验文件打包脚本
+.github/workflows/            macOS CI 与 Release 工作流
 ```
 
 ## 来源、许可与商标
