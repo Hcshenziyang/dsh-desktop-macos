@@ -347,6 +347,10 @@ final class Manager: ObservableObject {
         if let value = UserDefaults.standard.object(forKey: "simplifyPluginInventory") as? Bool { return value }
         return true
     }()
+    @Published var captureModelRequests: Bool = {
+        if let value = UserDefaults.standard.object(forKey: "captureModelRequests") as? Bool { return value }
+        return true
+    }()
     @Published var launchAtLogin: Bool = (SMAppService.mainApp.status == .enabled)
     @Published var isInstallingRuntime: Bool = false
     @Published var localModelState: LocalModelState = .stopped
@@ -427,6 +431,7 @@ final class Manager: ObservableObject {
         d.set(stopOnQuit, forKey: "stopOnQuit")
         d.set(cleanupStaleOnStart, forKey: "cleanupStaleOnStart")
         d.set(simplifyPluginInventory, forKey: "simplifyPluginInventory")
+        d.set(captureModelRequests, forKey: "captureModelRequests")
         d.set(localModelName, forKey: "localModelName")
         d.set(localModelStartExecutable, forKey: "localModelStartExecutable")
         d.set(localModelStartArguments, forKey: "localModelStartArguments")
@@ -882,6 +887,26 @@ final class Manager: ObservableObject {
         }
 
         let p = Process()
+        let processEnvironment = enrichedEnvironment()
+        var dshArguments = ["web", "--host", host, "--port", "\(port)", "--no-open"]
+        let inspectorOutput = requestInspectorOutputURL()
+        try? FileManager.default.removeItem(at: inspectorOutput)
+        if captureModelRequests {
+            if let inspector = requestInspectorResources() {
+                do {
+                    let patch = try prepareRequestInspectorPatch(
+                        moduleURL: inspector.moduleURL,
+                        outputURL: inspectorOutput
+                    )
+                    dshArguments.insert(contentsOf: ["--patch", patch.path], at: 1)
+                    appendLog("🔎 已启用模型固定输入检查器（仅本机临时缓存）")
+                } catch {
+                    appendLog("⚠️ 无法准备模型固定输入检查器：\(error.localizedDescription)")
+                }
+            } else {
+                appendLog("⚠️ 未找到模型固定输入检查器资源；本次启动不会捕获固定输入")
+            }
+        }
         // 优先用显式 node 解释器直接运行 dsh 的 bin.js：
         // GUI 应用从 Finder/LaunchServices 启动时 PATH 往往不含任何 node，
         // 依赖 shebang `#!/usr/bin/env node` 会直接失败。
@@ -889,14 +914,14 @@ final class Manager: ObservableObject {
         let script = resolvedScriptPath(dshPath)
         if let node = findNodeExecutable(), script.hasSuffix(".js") {
             p.executableURL = URL(fileURLWithPath: node)
-            p.arguments = [script, "web", "--host", host, "--port", "\(port)", "--no-open"]
+            p.arguments = [script] + dshArguments
         } else {
             p.executableURL = URL(fileURLWithPath: dshPath)
-            p.arguments = ["web", "--host", host, "--port", "\(port)", "--no-open"]
+            p.arguments = dshArguments
         }
         p.currentDirectoryURL = URL(fileURLWithPath: "/tmp")
         // 双保险：同时补充 PATH，覆盖直接执行分支及 dsh 内部再拉起子进程的场景
-        p.environment = enrichedEnvironment()
+        p.environment = processEnvironment
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = pipe
@@ -1067,6 +1092,7 @@ final class Manager: ObservableObject {
         proc = nil
         readyTimer?.invalidate()
         readyTimer = nil
+        try? FileManager.default.removeItem(at: requestInspectorOutputURL())
         appendLog("⏹ dsh web 已退出")
         if pendingRestart {
             pendingRestart = false

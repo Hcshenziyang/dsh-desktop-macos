@@ -2,11 +2,11 @@
 
 ## Upstream project
 
-This repository is a modified fork of:
+This project is an independently maintained derivative of:
 
 - Project: `frankfika/dsh-desktop-macos`
 - Upstream URL: <https://github.com/frankfika/dsh-desktop-macos>
-- Fork baseline: commit `7bf53cd9b14e5cf4861f92f46157bfd8e7ba150a`
+- Derivation baseline: commit `7bf53cd9b14e5cf4861f92f46157bfd8e7ba150a`
 - Original copyright: Copyright (c) 2026 Fang Chen
 - License: MIT License; the complete text is preserved in [LICENSE](LICENSE)
 
@@ -17,11 +17,13 @@ contributors, where applicable, and are distributed under the same MIT License.
 `Resources/AppIcon.icns` was generated from the upstream project's MIT-licensed icon
 source and remains covered by the attribution and license above.
 
-## Scope of this fork
+## Project lineage and scope
 
-This fork focuses exclusively on the macOS desktop application. The upstream Android,
-iOS, and Windows clients were removed. Removal of those platform directories does not
-remove or alter the upstream attribution or license obligations for the retained code.
+Beginning with `v0.1.0`, DSH Desktop Community has its own project name, semantic
+versioning, roadmap, repository, and release process. It focuses exclusively on the macOS
+desktop application; the upstream Android, iOS, and Windows clients were removed. This
+independent maintenance model does not make the retained code a clean-room implementation
+and does not remove or alter upstream attribution or license obligations.
 
 ## Independent project
 

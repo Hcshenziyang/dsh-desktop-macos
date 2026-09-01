@@ -56,6 +56,7 @@ final class ArchiveStore: ObservableObject {
         dataRootURL = dshHomeDirectoryURL()
     }
 
+    // 路径拼接优化显示
     var displayDataRoot: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         let path = dataRootURL.path
@@ -64,6 +65,7 @@ final class ArchiveStore: ObservableObject {
         return path
     }
 
+    //
     func reload() {
         guard !isLoading, !isBusy else { return }
         isLoading = true

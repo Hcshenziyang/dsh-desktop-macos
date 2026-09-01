@@ -9,6 +9,7 @@ struct ContentView: View {
     @ObservedObject private var mgr = Manager.shared // boserveobject是告诉界面观察这个对象，属性变化需要重新计算界面
     @State private var showSettings = false // 是否显示设置
     @State private var showArchiveManager = false // 是否显示归档管理
+    @State private var showContextMemory = false // 是否显示模型上下文与长期记忆
     @State private var confirmKillExternal = false // 是否显示停止确认框
 
     var body: some View {
@@ -34,6 +35,9 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showArchiveManager) {
             ArchiveManagerView()
+        }
+        .sheet(isPresented: $showContextMemory) {
+            ContextMemoryView()
         }
         .alert("停止外部实例", isPresented: $confirmKillExternal) {
             Button("停止", role: .destructive) { mgr.killExternal() }
@@ -99,6 +103,12 @@ struct ContentView: View {
                     .labelStyle(.iconOnly)
             }
             .help("查看、恢复或清理已归档会话")
+
+            Button(action: { showContextMemory = true }) {
+                Label("固定输入与记忆", systemImage: "brain")
+                    .labelStyle(.iconOnly)
+            }
+            .help("查看实际 System Prompt、工具/Skill 目录、固定指令与长期记忆")
 
             Button(action: { showSettings = true }) {
                 Label("设置", systemImage: "gearshape")
@@ -231,169 +241,209 @@ struct SettingsView: View {
     }()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("设置").font(.title2).bold()
+        VStack(spacing: 0) {
+            HStack {
+                Text("设置").font(.title2).bold()
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(.bar)
 
-            GroupBox(label: Label("服务", systemImage: "server.rack")) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        Text("端口:")
-                        TextField("3080", value: $mgr.port, formatter: portFormatter)
-                            .frame(width: 90)
-                        Text("主机:")
-                        TextField("127.0.0.1", text: $mgr.host)
-                            .frame(width: 130)
-                        Spacer()
-                    }
-                    HStack(spacing: 20) {
-                        Toggle("打开应用时自动启动服务", isOn: $mgr.autoStart)
-                        Toggle("退出应用时停止服务", isOn: $mgr.stopOnQuit)
-                        Toggle("开机自启", isOn: $mgr.launchAtLogin)
-                            .onChange(of: mgr.launchAtLogin) { newValue in
-                                mgr.toggleLaunchAtLogin(newValue)
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+
+                    GroupBox(label: Label("服务", systemImage: "server.rack")) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 12) {
+                                Text("端口:")
+                                TextField("3080", value: $mgr.port, formatter: portFormatter)
+                                    .frame(width: 90)
+                                Text("主机:")
+                                TextField("127.0.0.1", text: $mgr.host)
+                                    .frame(width: 130)
+                                Spacer()
                             }
-                    }
-                    HStack(spacing: 20) {
-                        Toggle("启动时自动清理无响应的残留 dsh 进程", isOn: $mgr.cleanupStaleOnStart)
-                        Spacer()
-                    }
-                    HStack(spacing: 12) {
-                        Toggle("简化内嵌 Web UI 的插件列表", isOn: $mgr.simplifyPluginInventory)
-                        Spacer()
-                        Text("默认只显示用户安装；异常与全部运行单元仍可切换")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    HStack(spacing: 12) {
-                        Text("dsh 路径:")
-                        TextField("", text: $mgr.dshPath)
-                            .font(.system(.body, design: .monospaced))
-                        Button("浏览…") { pickPath() }
-                        if !FileManager.default.isExecutableFile(atPath: mgr.dshPath) {
-                            Button("安装官方版本") { mgr.installOfficialRuntime() }
-                                .disabled(mgr.isInstallingRuntime)
-                        }
-                        if FileManager.default.isExecutableFile(atPath: mgr.dshPath) {
-                            Text("✓ 有效").foregroundColor(.green)
-                        } else {
-                            Text("✗ 无效").foregroundColor(.red)
-                        }
-                    }
-                    HStack {
-                        Text("修改端口/主机后，请点击「重启」让服务生效。")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        if case .externalRunning(let pid) = mgr.state {
-                            Button(role: .destructive) { confirmKillExternal = true } label: {
-                                Label("停止外部实例 (pid \(pid))", systemImage: "xmark.circle")
+                            HStack(spacing: 20) {
+                                Toggle("打开应用时自动启动服务", isOn: $mgr.autoStart)
+                                Toggle("退出应用时停止服务", isOn: $mgr.stopOnQuit)
+                                Toggle("开机自启", isOn: $mgr.launchAtLogin)
+                                    .onChange(of: mgr.launchAtLogin) { newValue in
+                                        mgr.toggleLaunchAtLogin(newValue)
+                                    }
+                            }
+                            HStack(spacing: 20) {
+                                Toggle("启动时自动清理无响应的残留 dsh 进程", isOn: $mgr.cleanupStaleOnStart)
+                                Spacer()
+                            }
+                            HStack(spacing: 12) {
+                                Toggle("简化内嵌 Web UI 的插件列表", isOn: $mgr.simplifyPluginInventory)
+                                Spacer()
+                                Text("默认只显示用户安装；异常与全部运行单元仍可切换")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            HStack(spacing: 12) {
+                                Toggle("捕获模型固定输入（本机临时缓存）", isOn: $mgr.captureModelRequests)
+                                Spacer()
+                                Text("重启 DSH 后生效；不捕获普通对话和工具执行过程")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            HStack(spacing: 12) {
+                                Text("dsh 路径:")
+                                TextField("", text: $mgr.dshPath)
+                                    .font(.system(.body, design: .monospaced))
+                                Button("浏览…") { pickPath() }
+                                if !FileManager.default.isExecutableFile(atPath: mgr.dshPath) {
+                                    Button("安装官方版本") { mgr.installOfficialRuntime() }
+                                        .disabled(mgr.isInstallingRuntime)
+                                }
+                                if FileManager.default.isExecutableFile(atPath: mgr.dshPath) {
+                                    Text("✓ 有效").foregroundColor(.green)
+                                } else {
+                                    Text("✗ 无效").foregroundColor(.red)
+                                }
+                            }
+                            HStack {
+                                Text("修改端口/主机后，请点击「重启」让服务生效。")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                if case .externalRunning(let pid) = mgr.state {
+                                    Button(role: .destructive) {
+                                        confirmKillExternal = true
+                                    } label: {
+                                        Label("停止外部实例 (pid \(pid))", systemImage: "xmark.circle")
+                                    }
+                                }
                             }
                         }
+                        .padding(4)
+                    }
+
+                    GroupBox(label: Label("本地模型服务", systemImage: "cpu")) {
+                        VStack(alignment: .leading, spacing: 9) {
+                            HStack(spacing: 10) {
+                                Text("名称:").frame(width: 86, alignment: .trailing)
+                                TextField("例如：Qwen 27B", text: $mgr.localModelName)
+                            }
+                            HStack(spacing: 10) {
+                                Text("启动程序:").frame(width: 86, alignment: .trailing)
+                                TextField("可执行文件或脚本路径", text: $mgr.localModelStartExecutable)
+                                    .font(.system(.body, design: .monospaced))
+                                Button("浏览…") { pickLocalModelExecutable(forStop: false) }
+                                Text(
+                                    FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath) ? "✓" : "✗"
+                                )
+                                .foregroundColor(
+                                    FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath)
+                                        ? .green : .red)
+                            }
+                            HStack(spacing: 10) {
+                                Text("启动参数:").frame(width: 86, alignment: .trailing)
+                                TextField("例如：--port 8000 --model \"/路径/模型\"", text: $mgr.localModelStartArguments)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            HStack(spacing: 10) {
+                                Text("停止程序:").frame(width: 86, alignment: .trailing)
+                                TextField("可选；后台服务建议配置 stop.sh", text: $mgr.localModelStopExecutable)
+                                    .font(.system(.body, design: .monospaced))
+                                Button("浏览…") { pickLocalModelExecutable(forStop: true) }
+                            }
+                            HStack(spacing: 10) {
+                                Text("停止参数:").frame(width: 86, alignment: .trailing)
+                                TextField("可选", text: $mgr.localModelStopArguments)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            HStack(spacing: 10) {
+                                Text("健康检查:").frame(width: 86, alignment: .trailing)
+                                TextField("可选，例如 http://127.0.0.1:<端口>/health", text: $mgr.localModelHealthURL)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            HStack(spacing: 10) {
+                                Circle()
+                                    .fill(localModelStatusColor)
+                                    .frame(width: 9, height: 9)
+                                Text(localModelStatusText)
+                                Spacer()
+                                Toggle("退出应用时停止本地模型", isOn: $mgr.stopLocalModelOnQuit)
+                                Button(
+                                    mgr.localModelState == .starting || mgr.localModelState == .ready ? "停止" : "启动"
+                                ) {
+                                    mgr.toggleLocalModel()
+                                }
+                                .disabled(!mgr.canToggleLocalModel)
+                            }
+                            Text("程序将直接以当前用户权限运行；参数不会经过 Shell，也不支持管道、重定向或命令替换。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(4)
+                    }
+
+                    GroupBox(label: Label("日志", systemImage: "text.alignleft")) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    Text(mgr.logs.isEmpty ? "（暂无日志）" : mgr.logs)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .textSelection(.enabled)
+                                        .id("logtail")
+                                        .padding(8)
+                                }
+                                .frame(height: 180)
+                                .background(Color.black.opacity(0.85))
+                                .cornerRadius(6)
+                                .onChange(of: mgr.logs) { _ in
+                                    withAnimation(.none) { proxy.scrollTo("logtail", anchor: .bottom) }
+                                }
+                            }
+                            Button("清空日志") { mgr.clearLogs() }
+                                .controlSize(.small)
+                        }
+                        .padding(4)
                     }
                 }
-                .padding(4)
+                .padding(18)
             }
 
-            GroupBox(label: Label("本地模型服务", systemImage: "cpu")) {
-                VStack(alignment: .leading, spacing: 9) {
-                    HStack(spacing: 10) {
-                        Text("名称:").frame(width: 86, alignment: .trailing)
-                        TextField("例如：Qwen 27B", text: $mgr.localModelName)
-                    }
-                    HStack(spacing: 10) {
-                        Text("启动程序:").frame(width: 86, alignment: .trailing)
-                        TextField("可执行文件或脚本路径", text: $mgr.localModelStartExecutable)
-                            .font(.system(.body, design: .monospaced))
-                        Button("浏览…") { pickLocalModelExecutable(forStop: false) }
-                        Text(FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath) ? "✓" : "✗")
-                            .foregroundColor(FileManager.default.isExecutableFile(atPath: mgr.localModelStartPath) ? .green : .red)
-                    }
-                    HStack(spacing: 10) {
-                        Text("启动参数:").frame(width: 86, alignment: .trailing)
-                        TextField("例如：--port 8000 --model \"/路径/模型\"", text: $mgr.localModelStartArguments)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    HStack(spacing: 10) {
-                        Text("停止程序:").frame(width: 86, alignment: .trailing)
-                        TextField("可选；后台服务建议配置 stop.sh", text: $mgr.localModelStopExecutable)
-                            .font(.system(.body, design: .monospaced))
-                        Button("浏览…") { pickLocalModelExecutable(forStop: true) }
-                    }
-                    HStack(spacing: 10) {
-                        Text("停止参数:").frame(width: 86, alignment: .trailing)
-                        TextField("可选", text: $mgr.localModelStopArguments)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    HStack(spacing: 10) {
-                        Text("健康检查:").frame(width: 86, alignment: .trailing)
-                        TextField("可选，例如 http://127.0.0.1:<端口>/health", text: $mgr.localModelHealthURL)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(localModelStatusColor)
-                            .frame(width: 9, height: 9)
-                        Text(localModelStatusText)
-                        Spacer()
-                        Toggle("退出应用时停止本地模型", isOn: $mgr.stopLocalModelOnQuit)
-                        Button(mgr.localModelState == .starting || mgr.localModelState == .ready ? "停止" : "启动") {
-                            mgr.toggleLocalModel()
-                        }
-                        .disabled(!mgr.canToggleLocalModel)
-                    }
-                    Text("程序将直接以当前用户权限运行；参数不会经过 Shell，也不支持管道、重定向或命令替换。")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding(4)
-            }
-
-            GroupBox(label: Label("日志", systemImage: "text.alignleft")) {
-                VStack(alignment: .leading, spacing: 6) {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            Text(mgr.logs.isEmpty ? "（暂无日志）" : mgr.logs)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
-                                .id("logtail")
-                                .padding(8)
-                        }
-                        .frame(height: 180)
-                        .background(Color.black.opacity(0.85))
-                        .cornerRadius(6)
-                        .onChange(of: mgr.logs) { _ in
-                            withAnimation(.none) { proxy.scrollTo("logtail", anchor: .bottom) }
-                        }
-                    }
-                    Button("清空日志") { mgr.clearLogs() }
-                        .controlSize(.small)
-                }
-                .padding(4)
-            }
+            Divider()
 
             HStack {
                 Spacer()
                 Button("完成") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(.bar)
         }
-        .padding(18)
-        .frame(width: 720)
-        .onChange(of: mgr.port) { _ in mgr.persist(); mgr.refreshExternal() }
+        .frame(width: 720, height: 600)
+        .onChange(of: mgr.port) { _ in
+            mgr.persist(); mgr.refreshExternal()
+        }
         .onChange(of: mgr.host) { _ in mgr.persist() }
         .onChange(of: mgr.dshPath) { _ in mgr.persist() }
         .onChange(of: mgr.autoStart) { _ in mgr.persist() }
         .onChange(of: mgr.stopOnQuit) { _ in mgr.persist() }
         .onChange(of: mgr.cleanupStaleOnStart) { _ in mgr.persist() }
         .onChange(of: mgr.simplifyPluginInventory) { _ in mgr.persist() }
+        .onChange(of: mgr.captureModelRequests) { _ in mgr.persist() }
         .onChange(of: mgr.localModelName) { _ in mgr.persist() }
-        .onChange(of: mgr.localModelStartExecutable) { _ in mgr.persist(); mgr.refreshLocalModel() }
+        .onChange(of: mgr.localModelStartExecutable) { _ in
+            mgr.persist(); mgr.refreshLocalModel()
+        }
         .onChange(of: mgr.localModelStartArguments) { _ in mgr.persist() }
         .onChange(of: mgr.localModelStopExecutable) { _ in mgr.persist() }
         .onChange(of: mgr.localModelStopArguments) { _ in mgr.persist() }
-        .onChange(of: mgr.localModelHealthURL) { _ in mgr.persist(); mgr.refreshLocalModel() }
+        .onChange(of: mgr.localModelHealthURL) { _ in
+            mgr.persist(); mgr.refreshLocalModel()
+        }
         .onChange(of: mgr.stopLocalModelOnQuit) { _ in mgr.persist() }
         .alert("停止外部实例", isPresented: $confirmKillExternal) {
             Button("停止", role: .destructive) { mgr.killExternal() }

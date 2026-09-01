@@ -1,6 +1,6 @@
 # Contributing
 
-感谢你帮助改进 DSH Desktop Community。这个分支只接受 macOS 客户端、macOS 构建与
+感谢你帮助改进 DSH Desktop Community。本项目只接受 macOS 客户端、macOS 构建与
 相关文档的修改。
 
 1. 较大的行为或界面改动请先开 Issue 说明设计与影响。

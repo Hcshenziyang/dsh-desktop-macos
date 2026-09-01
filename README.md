@@ -1,14 +1,17 @@
 # DSH Desktop Community for macOS
 
-一个专注 macOS 的 DSH 桌面客户端社区分支。应用使用 SwiftUI 与 WKWebView，负责发现、
-启动、停止和重启本机的 `dsh web` 服务，并在原生窗口中显示 DeepSeek Harness Web UI。
+一个独立维护、专注 macOS 的 DSH 桌面客户端社区项目。应用使用 SwiftUI 与 WKWebView，
+负责发现、启动、停止和重启本机的 `dsh web` 服务，并在原生窗口中显示 DeepSeek Harness
+Web UI。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
 
 > [!IMPORTANT]
-> 本仓库是 [frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos)
-> 的修改分支，基于上游提交
+> 本项目是从 [frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos)
+> 演进而来的独立维护衍生项目，基于上游提交
 > [`7bf53cd`](https://github.com/frankfika/dsh-desktop-macos/commit/7bf53cd9b14e5cf4861f92f46157bfd8e7ba150a)。
 > 它不是 DeepSeek、DeepSeek Harness 或原作者的官方产品，也未获得这些主体的隶属、
-> 认可或背书。Android、iOS 和 Windows 客户端已从本分支移除。
+> 认可或背书。从 `v0.1.0` 起，本项目拥有自己的名称、版本、路线图、仓库和发布流程；
+> Android、iOS 和 Windows 客户端已经移除。独立维护不改变保留代码的 MIT 许可、原作者
+> 版权和来源声明义务。
 
 ## 功能
 
@@ -21,6 +24,7 @@
 - 可配置的本地模型服务按钮，可启动和停止用户选择的程序或脚本
 - 原生归档管理，可查看、恢复、逐条删除或清空 DSH 已归档会话
 - 简化内嵌插件列表，默认聚焦用户安装和异常运行单元，官方组件保留在高级视图
+- 原生“固定输入与记忆”检查器，可查看最终系统提示、工具/Skill 目录和本地长期记忆
 
 ## 系统要求
 
@@ -54,7 +58,13 @@ ARCHS="$(uname -m)" ./build.sh
 ./scripts/package.sh
 ```
 
-当前仓库不提供指向上游发布包的自动安装脚本，避免社区分支与上游二进制混淆。
+## 版本与发布
+
+当前版本为 `v0.1.0`，应用内部版本为 `0.1.0 (1)`。项目使用语义化版本号；推送 `v*`
+标签会触发 macOS 通用版构建，并在本仓库创建对应的 GitHub Release。各版本变化见
+[CHANGELOG.md](CHANGELOG.md)。
+
+当前仓库不提供指向上游发布包的自动安装脚本，避免本项目与上游二进制混淆。
 准备公开发布前请完成 [发布检查清单](PUBLISHING.md)。
 
 ## 本地模型服务
@@ -113,6 +123,40 @@ Web UI 组件也会平铺在同一列表中。客户端默认对**内嵌 Web UI*
 列表仍可使用。可以在客户端“设置”中关闭“简化内嵌 Web UI 的插件列表”。通过“系统浏览器”
 打开 DSH 时仍显示上游原始界面。
 
+## 模型固定输入与长期记忆
+
+工具栏的脑形按钮会打开原生“模型固定输入与记忆”窗口。它不重复 DSH“轨迹”已有的对话、
+工具调用和执行过程，而是按每次实际 Assistant 请求展示：
+
+- 最终实际发送的 System Prompt，以及 DSH 注册表中组成它的具名提示词段
+- Provider Adapter 收到的完整工具目录、说明和参数 Schema
+- 最终请求中最新的 `skill-catalog`：Skill 名称、说明和实际发送的目录原文
+- `AGENTS.md` 工作区指令与本轮已经显式加载的 Skill 正文
+- System Prompt 中本次实际注入的 `<memory-profile>`
+
+普通用户对话、模型回复、工具调用、工具结果、上下文压缩过程和标题生成不会写入检查器
+缓存。Skill 目录在 DSH 中实际是一条持久的用户角色 `<system-reminder>`，并不属于 System
+Prompt 或工具执行轨迹；客户端依据它的 `skill-catalog` 来源元数据识别当前有效目录。
+
+应用不会修改 DSH 核心或用户 profile。由本客户端启动 DSH 时，它通过一次性的
+`dsh web --patch` 挂载随应用打包的只读观察插件，在 `system-prompt/assemble` 与
+`llm/stream` 边界读取最终固定输入。最近 32 次请求保存在当前用户的 macOS Caches 目录，文件权限为 `0600`，正常停止
+客户端托管的 DSH 时会删除；下次启动也会先清除残留缓存。适配器私有的 `replayState`、
+取消信号和服务商凭据不会写入。可以在“设置”中关闭捕获，修改后需重启 DSH。
+
+外部启动的 DSH 没有自动挂载该观察插件，因此客户端会提示先停止外部实例并从客户端
+重新启动。该页面展示的是 DSH 交给 Provider Adapter 的固定语义输入；适配器随后生成的
+厂商专用 HTTP JSON 可能具有不同字段布局。
+
+长期记忆页只读展示 `dsh-native-memory` 的 `~/.dsh/storages/dsh_memory.json`：
+
+- 每个工作区自动注入 System Prompt 的 Profile
+- 活跃及已归档 Facts、类型、标签、时间和来源会话序号
+- 所选模型请求是否实际注入了该工作区的 Profile
+
+记忆写入、编辑和遗忘仍通过 `memory_remember`、`memory_edit`、`memory_forget` 完成，并沿用
+插件的人工审批流程。若设置了 `DSH_HOME`，检查器会读取对应数据目录。
+
 ## 项目结构
 
 ```text
@@ -120,21 +164,25 @@ Sources/DSHLauncherApp.swift  应用入口与 macOS 生命周期
 Sources/Manager.swift         DSH、本地模型与进程管理
 Sources/MainViews.swift       主界面与设置界面
 Sources/Archive.swift         归档数据、管理逻辑与界面
+Sources/ContextMemory.swift   模型固定输入与长期记忆查看器
+Sources/InspectorSupport.swift 检查器资源、缓存与临时 Patch
 Sources/WebView.swift         内嵌 Web UI 与插件列表增强
 Package.swift                 SwiftPM 模块描述，用于编辑器索引与跨文件跳转
 .sourcekit-lsp/config.json    SourceKit-LSP 索引配置
 Resources/AppIcon.icns        App 图标资源
+Resources/RequestInspector/   DSH 请求边界只读观察插件
 Info.plist                    macOS Bundle 元数据
 build.sh                      通用 macOS App 构建脚本
 script/build_and_run.sh       本地构建、启动和调试入口
 scripts/package.sh            ZIP、DMG 与校验文件打包脚本
 .github/workflows/            macOS CI 与 Release 工作流
+CHANGELOG.md                  版本变更记录
 ```
 
 ## 来源、许可与商标
 
 - 原始项目代码版权归 Fang Chen 所有，依据 [MIT License](LICENSE) 使用和再发布。
-- 本分支保留完整 Git 历史、原始版权声明和许可文本；修改部分由相应贡献者持有版权。
+- 本项目保留完整 Git 历史、原始版权声明和许可文本；修改部分由相应贡献者持有版权。
 - DeepSeek Harness 是独立项目，通过官方 `@deepseek-ai/dsh` npm 包单独安装；本仓库不
   包含它的源码、模型权重或用户凭据。
 - “DeepSeek”“DSH”及相关名称仅用于说明兼容对象。MIT 许可不授予任何商标权。
@@ -150,10 +198,11 @@ scripts/package.sh            ZIP、DMG 与校验文件打包脚本
 
 ## English summary
 
-DSH Desktop Community is a macOS-only derivative of
+DSH Desktop Community is an independently maintained, macOS-only derivative of
 [frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos). It is an
 independent community project and is not affiliated with, endorsed by, or an official
 product of DeepSeek, DeepSeek Harness, or the upstream author. The upstream copyright and
-MIT license are preserved. DeepSeek Harness is installed separately; this repository does
-not distribute model weights or credentials. See [NOTICE.md](NOTICE.md) for attribution and
-trademark information.
+MIT license are preserved. Beginning with `v0.1.0`, this project has its own name,
+versioning, roadmap, repository, and release process. DeepSeek Harness is installed
+separately; this repository does not distribute model weights or credentials. See
+[NOTICE.md](NOTICE.md) for attribution and trademark information.
