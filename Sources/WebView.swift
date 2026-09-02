@@ -257,12 +257,22 @@ private func pluginInventoryPreferenceScript(enabled: Bool, userPackages: [Strin
 struct WebView: NSViewRepresentable {
     let url: URL
     let simplifyPluginInventory: Bool
+    let theme: ThemeWebSnapshot
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
         let packages = webProfileUserPluginPackages()
         let configuration = WKWebViewConfiguration()
+        configuration.setURLSchemeHandler(
+            ThemeAssetSchemeHandler(),
+            forURLScheme: ThemeAssetRepository.scheme
+        )
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: themeEnhancementScript(snapshot: theme),
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        ))
         configuration.userContentController.addUserScript(WKUserScript(
             source: pluginInventoryEnhancementScript(
                 enabled: simplifyPluginInventory,
@@ -276,6 +286,7 @@ struct WebView: NSViewRepresentable {
         context.coordinator.lastURL = url
         context.coordinator.simplifyPluginInventory = simplifyPluginInventory
         context.coordinator.userPluginPackages = packages
+        context.coordinator.theme = theme
         web.load(URLRequest(url: url))
         return web
     }
@@ -284,7 +295,9 @@ struct WebView: NSViewRepresentable {
         let packages = webProfileUserPluginPackages()
         context.coordinator.simplifyPluginInventory = simplifyPluginInventory
         context.coordinator.userPluginPackages = packages
+        context.coordinator.theme = theme
         context.coordinator.applyPluginInventoryPreferences(to: nsView)
+        context.coordinator.applyThemePreferences(to: nsView)
         guard context.coordinator.lastURL != url else { return }
         context.coordinator.lastURL = url
         nsView.load(URLRequest(url: url))
@@ -294,6 +307,13 @@ struct WebView: NSViewRepresentable {
         var lastURL: URL?
         var simplifyPluginInventory = true
         var userPluginPackages: [String] = []
+        var theme = ThemeWebSnapshot(
+            enabled: false,
+            lightTokens: [:],
+            darkTokens: [:],
+            effects: .standard,
+            wallpaper: nil
+        )
 
         func applyPluginInventoryPreferences(to webView: WKWebView) {
             webView.evaluateJavaScript(pluginInventoryPreferenceScript(
@@ -302,7 +322,12 @@ struct WebView: NSViewRepresentable {
             ))
         }
 
+        func applyThemePreferences(to webView: WKWebView) {
+            webView.evaluateJavaScript(themePreferenceScript(snapshot: theme))
+        }
+
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            applyThemePreferences(to: webView)
             applyPluginInventoryPreferences(to: webView)
         }
 

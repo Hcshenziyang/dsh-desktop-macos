@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "neko-sugar-club",
+  "name": "猫耳心跳",
+  "category": "可爱猫娘",
+  "detail": "原创成年猫耳角色、星糖浮光与软边缝线",
+  "order": 80,
+  "typography": "rounded",
+  "effects": {
+    "kind": "nekoSparkle",
+    "iconStyle": "playful",
+    "motion": 0.70,
+    "cornerRadius": 21,
+    "glassBlur": 18,
+    "iconGlow": 0.58,
+    "frame": {
+      "style": "stitched",
+      "width": 1.30,
+      "glow": 0.32
+    }
+  },
+  "light": {
+    "base": "#FFF2F8",
+    "layer1": "#FFF9FC",
+    "layer2": "#F9E4F1",
+    "layer3": "#F2D5E6",
+    "sidebar": "#FBE6F2",
+    "border": "#DEAFC9",
+    "accent": "#CE5A9F",
+    "labelPrimary": "#452A3C",
+    "labelSecondary": "#76546B",
+    "labelTertiary": "#9C7890",
+    "accentSoft": "#F8CFE4"
+  },
+  "dark": {
+    "base": "#1D1324",
+    "layer1": "#281A31",
+    "layer2": "#34213F",
+    "layer3": "#432A4E",
+    "sidebar": "#24172C",
+    "border": "#67456F",
+    "accent": "#FF8FC8",
+    "labelPrimary": "#FFF2FA",
+    "labelSecondary": "#E6C3DA",
+    "labelTertiary": "#B58CA8",
+    "accentSoft": "#57304C"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.04,
+    "surfaceOpacity": 0.82
+  }
+}

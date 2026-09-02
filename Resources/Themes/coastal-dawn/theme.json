@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "coastal-dawn",
+  "name": "海岬初晓",
+  "category": "风景",
+  "detail": "海雾、晨光与辽阔呼吸感",
+  "order": 60,
+  "typography": "system",
+  "effects": {
+    "kind": "mist",
+    "iconStyle": "hierarchical",
+    "motion": 0.34,
+    "cornerRadius": 14,
+    "glassBlur": 12,
+    "iconGlow": 0.24,
+    "frame": {
+      "style": "soft",
+      "width": 0.85,
+      "glow": 0.10
+    }
+  },
+  "light": {
+    "base": "#EFF5F7",
+    "layer1": "#F8FBFC",
+    "layer2": "#E3EDF0",
+    "layer3": "#D5E3E7",
+    "sidebar": "#DDE9EC",
+    "border": "#ABC0C7",
+    "accent": "#3D7E91",
+    "labelPrimary": "#183039",
+    "labelSecondary": "#47636D",
+    "labelTertiary": "#718891",
+    "accentSoft": "#CBE1E7"
+  },
+  "dark": {
+    "base": "#0C1820",
+    "layer1": "#12232D",
+    "layer2": "#19303C",
+    "layer3": "#223D4A",
+    "sidebar": "#0F1D25",
+    "border": "#3E5B68",
+    "accent": "#6BB6C8",
+    "labelPrimary": "#EFF8FA",
+    "labelSecondary": "#BED4DA",
+    "labelTertiary": "#89A7B0",
+    "accentSoft": "#234D59"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.14,
+    "surfaceOpacity": 0.80
+  }
+}

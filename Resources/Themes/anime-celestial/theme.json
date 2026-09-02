@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "anime-celestial",
+  "name": "星轨次元",
+  "category": "二次元",
+  "detail": "星图、靛蓝与圆润未来感",
+  "order": 10,
+  "typography": "rounded",
+  "effects": {
+    "kind": "stars",
+    "iconStyle": "luminous",
+    "motion": 0.72,
+    "cornerRadius": 16,
+    "glassBlur": 18,
+    "iconGlow": 0.72,
+    "frame": {
+      "style": "arcane",
+      "width": 1.25,
+      "glow": 0.55
+    }
+  },
+  "light": {
+    "base": "#EEF1FF",
+    "layer1": "#F8F8FF",
+    "layer2": "#E2E8FA",
+    "layer3": "#D3DCF4",
+    "sidebar": "#DCE4F8",
+    "border": "#A7B5DB",
+    "accent": "#6D5CE8",
+    "labelPrimary": "#171C3A",
+    "labelSecondary": "#48527A",
+    "labelTertiary": "#707AA0",
+    "accentSoft": "#DCD8FF"
+  },
+  "dark": {
+    "base": "#080E25",
+    "layer1": "#111938",
+    "layer2": "#18234A",
+    "layer3": "#202D59",
+    "sidebar": "#0D1531",
+    "border": "#3A4C80",
+    "accent": "#9A8CFF",
+    "labelPrimary": "#F4F3FF",
+    "labelSecondary": "#C2C8EC",
+    "labelTertiary": "#8893C2",
+    "accentSoft": "#2C285F"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.20,
+    "surfaceOpacity": 0.78
+  }
+}

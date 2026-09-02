@@ -459,6 +459,7 @@ struct ContextMemoryView: View {
             footer
         }
         .frame(minWidth: 980, idealWidth: 1120, minHeight: 640, idealHeight: 740)
+        .background(ThemeWindowBackground())
         .onAppear { store.reload() }
         .onReceive(refreshTimer) { _ in store.reload() }
         .onChange(of: store.requests) { requests in
@@ -495,15 +496,13 @@ struct ContextMemoryView: View {
                 .keyboardShortcut(.defaultAction)
         }
         .padding(16)
-        .background(.bar)
+        .background(ThemeChromeBackground())
     }
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 5) {
             ForEach(store.issues, id: \.self) { issue in
-                Label(issue, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundColor(.red)
-                    .textSelection(.enabled)
+                ThemedStatusBanner(message: issue, tone: .danger)
             }
             HStack(spacing: 8) {
                 Image(systemName: "lock.shield")
@@ -518,7 +517,7 @@ struct ContextMemoryView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 9)
-        .background(.bar)
+        .background(ThemeChromeBackground())
     }
 
     // MARK: 模型固定输入
@@ -732,12 +731,13 @@ private struct FixedInputDetailView: View {
     }
 
     private var systemPromptView: some View {
-        ScrollView([.vertical, .horizontal]) {
+        ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 14) {
                 GroupBox(label: Label("最终实际发送的 System Prompt", systemImage: "paperplane")) {
                     Text(request.systemPrompt.isEmpty ? "（本次请求没有 System Prompt）" : request.systemPrompt)
                         .font(.system(.body, design: .monospaced))
                         .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(6)
                 }
@@ -748,6 +748,7 @@ private struct FixedInputDetailView: View {
                             .font(.system(.body, design: .monospaced))
                             .foregroundColor(.green)
                             .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(6)
                     }
@@ -767,6 +768,7 @@ private struct FixedInputDetailView: View {
                                 Text(section.text)
                                     .font(.system(size: 11, design: .monospaced))
                                     .textSelection(.enabled)
+                                    .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.vertical, 6)
                             } label: {

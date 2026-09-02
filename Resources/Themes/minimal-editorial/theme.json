@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "minimal-editorial",
+  "name": "留白秩序",
+  "category": "简约",
+  "detail": "纸感留白与克制钴蓝",
+  "order": 20,
+  "typography": "modern",
+  "effects": {
+    "kind": "paper",
+    "iconStyle": "monochrome",
+    "motion": 0.16,
+    "cornerRadius": 8,
+    "glassBlur": 4,
+    "iconGlow": 0.08,
+    "frame": {
+      "style": "soft",
+      "width": 0.75,
+      "glow": 0.05
+    }
+  },
+  "light": {
+    "base": "#F6F2EA",
+    "layer1": "#FCFAF5",
+    "layer2": "#EDE9E1",
+    "layer3": "#E1DED8",
+    "sidebar": "#EFECE5",
+    "border": "#C7C2B8",
+    "accent": "#5873A8",
+    "labelPrimary": "#20242A",
+    "labelSecondary": "#565B63",
+    "labelTertiary": "#7C8085",
+    "accentSoft": "#DCE4F2"
+  },
+  "dark": {
+    "base": "#17191D",
+    "layer1": "#202328",
+    "layer2": "#292D33",
+    "layer3": "#33383F",
+    "sidebar": "#1C1F24",
+    "border": "#4A505A",
+    "accent": "#8EA9DB",
+    "labelPrimary": "#F2F0EB",
+    "labelSecondary": "#C8C5BF",
+    "labelTertiary": "#96979A",
+    "accentSoft": "#29364F"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0,
+    "surfaceOpacity": 0.93
+  }
+}

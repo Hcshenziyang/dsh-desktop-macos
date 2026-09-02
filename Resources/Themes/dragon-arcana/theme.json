@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "dragon-arcana",
+  "name": "龙焰秘典",
+  "category": "龙与魔法",
+  "detail": "原创苍穹巨龙、秘法书城与金属双线框",
+  "order": 110,
+  "typography": "elegant",
+  "effects": {
+    "kind": "dragonEmbers",
+    "iconStyle": "luminous",
+    "motion": 0.64,
+    "cornerRadius": 13,
+    "glassBlur": 16,
+    "iconGlow": 0.80,
+    "frame": {
+      "style": "arcane",
+      "width": 1.25,
+      "glow": 0.62
+    }
+  },
+  "light": {
+    "base": "#EEF0FB",
+    "layer1": "#F8F8FE",
+    "layer2": "#DFE3F5",
+    "layer3": "#D0D7EE",
+    "sidebar": "#DCE1F2",
+    "border": "#A3ADD2",
+    "accent": "#6654C8",
+    "labelPrimary": "#242748",
+    "labelSecondary": "#555B82",
+    "labelTertiary": "#7C82A6",
+    "accentSoft": "#D8D3FA"
+  },
+  "dark": {
+    "base": "#080D20",
+    "layer1": "#10172E",
+    "layer2": "#17213D",
+    "layer3": "#202C4D",
+    "sidebar": "#0C1228",
+    "border": "#3D4C77",
+    "accent": "#9B91FF",
+    "labelPrimary": "#F6F4FF",
+    "labelSecondary": "#C8CBEA",
+    "labelTertiary": "#8F98C2",
+    "accentSoft": "#302D67"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.10,
+    "surfaceOpacity": 0.77
+  }
+}

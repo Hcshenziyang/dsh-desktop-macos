@@ -465,25 +465,11 @@ final class ArchiveStore: ObservableObject {
 
 // MARK: - 归档管理
 
-private enum ArchiveConfirmation: Identifiable {
-    case delete(ArchivedConversation)
-    case deleteAll(Int)
-    case stopExternal(Int32)
-
-    var id: String {
-        switch self {
-        case .delete(let conversation): return "delete-\(conversation.id)"
-        case .deleteAll: return "delete-all"
-        case .stopExternal(let pid): return "stop-external-\(pid)"
-        }
-    }
-}
-
 struct ArchiveManagerView: View {
     @StateObject private var store = ArchiveStore()
     @ObservedObject private var mgr = Manager.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmation: ArchiveConfirmation?
+    @State private var dialog: ThemeDialogDescriptor?
 
     private var serviceActive: Bool {
         mgr.ownsProcess || mgr.state.portActive
@@ -521,7 +507,7 @@ struct ArchiveManagerView: View {
                         Button("停止服务") { mgr.stop() }
                             .disabled(mgr.state == .stopping)
                     } else if case .externalRunning(let pid) = mgr.state {
-                        Button("停止外部实例") { confirmation = .stopExternal(pid) }
+                        Button("停止外部实例") { presentStopExternalDialog(pid: pid) }
                     }
                 }
                 .padding(10)
@@ -579,15 +565,9 @@ struct ArchiveManagerView: View {
             }
 
             if let error = store.errorMessage {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .font(.callout)
-                    .foregroundColor(.red)
-                    .textSelection(.enabled)
+                ThemedStatusBanner(message: error, tone: .danger)
             } else if let status = store.statusMessage {
-                Label(status, systemImage: "checkmark.circle.fill")
-                    .font(.callout)
-                    .foregroundColor(.green)
-                    .textSelection(.enabled)
+                ThemedStatusBanner(message: status, tone: .success)
             }
 
             Text("“恢复”只取消隐藏标记；“永久删除”会先备份索引，再将日志目录移到 macOS 废纸篓。清空废纸篓后日志才不可恢复。")
@@ -596,7 +576,7 @@ struct ArchiveManagerView: View {
 
             HStack {
                 Button(role: .destructive) {
-                    confirmation = .deleteAll(store.items.count)
+                    presentDeleteAllDialog()
                 } label: {
                     Label("清空全部归档", systemImage: "trash")
                 }
@@ -610,41 +590,51 @@ struct ArchiveManagerView: View {
         .padding(18)
         .frame(width: 760)
         .frame(minHeight: 570)
+        .background(ThemeWindowBackground())
         .onAppear { store.reload() }
-        .alert(item: $confirmation) { prompt in
-            switch prompt {
-            case .delete(let conversation):
-                return Alert(
-                    title: Text("永久删除这条归档？"),
-                    message: Text("“\(conversation.title)”的日志将移到废纸篓，并从 DSH 索引中移除。操作前会自动备份索引。"),
-                    primaryButton: .destructive(Text("移到废纸篓")) {
-                        store.delete(conversation, servicePort: mgr.port)
-                    },
-                    secondaryButton: .cancel()
-                )
-            case .deleteAll(let count):
-                return Alert(
-                    title: Text("清空全部归档？"),
-                    message: Text("将从 DSH 索引中移除 \(count) 条归档，并把找到的日志目录移到废纸篓。操作前会自动备份索引。"),
-                    primaryButton: .destructive(Text("清空归档")) {
-                        store.deleteAll(servicePort: mgr.port)
-                    },
-                    secondaryButton: .cancel()
-                )
-            case .stopExternal(let pid):
-                return Alert(
-                    title: Text("停止外部 DSH 实例？"),
-                    message: Text("将向不是由本客户端启动的 dsh 进程（pid \(pid)）发送终止信号。"),
-                    primaryButton: .destructive(Text("停止")) { mgr.killExternal() },
-                    secondaryButton: .cancel()
-                )
-            }
-        }
+        .themedDialog(item: $dialog)
     }
 
     private var archiveSummary: String {
         let size = ByteCountFormatter.string(fromByteCount: store.totalByteCount, countStyle: .file)
         return "已归档 \(store.items.count) 条 · 日志 \(size)"
+    }
+
+    private func presentDeleteDialog(_ conversation: ArchivedConversation) {
+        dialog = ThemeDialogDescriptor(
+            title: "永久删除这条归档？",
+            message: "“\(conversation.title)”的日志将移到废纸篓，并从 DSH 索引中移除。操作前会自动备份索引。",
+            systemImage: "trash.fill",
+            tone: .danger,
+            primaryTitle: "移到废纸篓",
+            primaryRole: .destructive,
+            primaryAction: { store.delete(conversation, servicePort: mgr.port) }
+        )
+    }
+
+    private func presentDeleteAllDialog() {
+        let count = store.items.count
+        dialog = ThemeDialogDescriptor(
+            title: "清空全部归档？",
+            message: "将从 DSH 索引中移除 \(count) 条归档，并把找到的日志目录移到废纸篓。操作前会自动备份索引。",
+            systemImage: "trash.slash.fill",
+            tone: .danger,
+            primaryTitle: "清空归档",
+            primaryRole: .destructive,
+            primaryAction: { store.deleteAll(servicePort: mgr.port) }
+        )
+    }
+
+    private func presentStopExternalDialog(pid: Int32) {
+        dialog = ThemeDialogDescriptor(
+            title: "停止外部 DSH 实例？",
+            message: "将向不是由本客户端启动的 dsh 进程（pid \(pid)）发送终止信号。",
+            systemImage: "exclamationmark.octagon.fill",
+            tone: .danger,
+            primaryTitle: "停止",
+            primaryRole: .destructive,
+            primaryAction: { mgr.killExternal() }
+        )
     }
 
     @ViewBuilder
@@ -684,15 +674,17 @@ struct ArchiveManagerView: View {
 
             Spacer(minLength: 12)
 
-            Button("恢复") {
+            Button {
                 store.restore(conversation, servicePort: mgr.port)
+            } label: {
+                Label("恢复", systemImage: "arrow.uturn.backward")
             }
             .disabled(serviceActive || store.isBusy)
 
             Button(role: .destructive) {
-                confirmation = .delete(conversation)
+                presentDeleteDialog(conversation)
             } label: {
-                Text("删除")
+                Label("删除", systemImage: "trash")
             }
             .disabled(serviceActive || store.isBusy)
         }

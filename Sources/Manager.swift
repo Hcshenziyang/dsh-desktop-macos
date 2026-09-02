@@ -220,7 +220,7 @@ enum DSHState: Equatable {
         }
     }
 
-    /// 端口上有服务在监听（无论是本应用启动的还是外部实例）—— 用于「打开浏览器」等
+    /// 端口上有服务在监听（无论是本应用启动的还是外部实例）。
     var portActive: Bool {
         switch self {
         case .running, .externalRunning, .starting:
@@ -256,6 +256,30 @@ enum LocalModelState: Equatable {
     case ready
     case stopping
     case failed(String)
+}
+
+private enum LocalModelHealthResult {
+    case healthy
+    case unexpectedStatus(Int)
+    case unreachable
+}
+
+/// URLSession 的完成回调与探测线程可能同时访问结果，用一个很小的锁盒避免数据竞争。
+private final class LocalModelHealthProbeBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: LocalModelHealthResult = .unreachable
+
+    func store(_ result: LocalModelHealthResult) {
+        lock.lock()
+        value = result
+        lock.unlock()
+    }
+
+    func load() -> LocalModelHealthResult {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
 }
 
 /// 展开用户输入路径中的 `~`，方便在设置中填写 `~/models/start.sh`。
@@ -370,6 +394,8 @@ final class Manager: ObservableObject {
     private var localModelProc: Process?
     private var localModelStopProc: Process?
     private var localModelStartDeadline: Date?
+    private var localModelHealthFailureCount = 0
+    private var localModelHealthMismatchStatus: Int?
     private var readyTimer: Timer?
     private var watchTimer: Timer?
     private var logLines: [String] = []
@@ -450,22 +476,26 @@ final class Manager: ObservableObject {
         return url
     }
 
-    private func isLocalModelHealthy(_ url: URL, timeout: TimeInterval = 2) -> Bool {
+    private func probeLocalModelHealth(_ url: URL, timeout: TimeInterval = 2) -> LocalModelHealthResult {
         var request = URLRequest(url: url)
         request.timeoutInterval = timeout
         request.cachePolicy = .reloadIgnoringLocalCacheData
         let semaphore = DispatchSemaphore(value: 0)
-        var healthy = false
+        let result = LocalModelHealthProbeBox()
         let task = URLSession.shared.dataTask(with: request) { _, response, _ in
             if let http = response as? HTTPURLResponse {
-                healthy = (100...599).contains(http.statusCode)
+                result.store(
+                    (200...399).contains(http.statusCode)
+                        ? .healthy
+                        : .unexpectedStatus(http.statusCode)
+                )
             }
             semaphore.signal()
         }
         task.resume()
         _ = semaphore.wait(timeout: .now() + timeout + 1)
         task.cancel()
-        return healthy
+        return result.load()
     }
 
     func refreshLocalModel() {
@@ -480,20 +510,54 @@ final class Manager: ObservableObject {
         }
 
         DispatchQueue.global().async { [weak self] in
-            let healthy = self?.isLocalModelHealthy(healthURL) ?? false
+            let health = self?.probeLocalModelHealth(healthURL) ?? .unreachable
             DispatchQueue.main.async {
                 guard let self, self.configuredLocalModelHealthURL == healthURL,
                       self.localModelState != .stopping else { return }
-                if healthy {
+
+                switch health {
+                case .healthy:
+                    self.localModelHealthFailureCount = 0
+                    self.localModelHealthMismatchStatus = nil
                     self.localModelStartDeadline = nil
                     self.localModelState = .ready
-                } else if self.localModelState == .ready, self.localModelProc?.isRunning != true {
-                    self.localModelState = .stopped
-                } else if self.localModelState == .starting,
-                          let deadline = self.localModelStartDeadline,
-                          Date() > deadline {
-                    self.localModelState = .failed("健康检查超时")
-                    self.appendLog("✗ \(self.localModelDisplayName) 未在预期时间内通过健康检查")
+                case .unexpectedStatus(let statusCode):
+                    self.localModelHealthFailureCount = 0
+                    self.localModelStartDeadline = nil
+                    let message = "健康检查返回 HTTP \(statusCode)，端口可能被其他服务占用"
+                    if self.localModelHealthMismatchStatus != statusCode
+                        || self.localModelState != .failed(message) {
+                        self.appendLog("✗ \(self.localModelDisplayName) \(message)：\(healthURL.absoluteString)")
+                    }
+                    self.localModelHealthMismatchStatus = statusCode
+                    self.localModelState = .failed(message)
+                case .unreachable:
+                    let wasMismatch = self.localModelHealthMismatchStatus != nil
+                    self.localModelHealthMismatchStatus = nil
+
+                    if wasMismatch,
+                       self.localModelProc?.isRunning != true,
+                       case .failed = self.localModelState {
+                        self.localModelHealthFailureCount = 0
+                        self.localModelState = .stopped
+                    } else if self.localModelState == .ready {
+                        if self.localModelProc?.isRunning != true {
+                            self.localModelHealthFailureCount = 0
+                            self.localModelState = .stopped
+                        } else {
+                            self.localModelHealthFailureCount += 1
+                            if self.localModelHealthFailureCount >= 3 {
+                                self.localModelState = .failed("健康检查连续失败")
+                                self.appendLog("✗ \(self.localModelDisplayName) 健康检查连续失败：\(healthURL.absoluteString)")
+                            }
+                        }
+                    } else if self.localModelState == .starting,
+                              let deadline = self.localModelStartDeadline,
+                              Date() > deadline {
+                        self.localModelHealthFailureCount = 0
+                        self.localModelState = .failed("健康检查超时")
+                        self.appendLog("✗ \(self.localModelDisplayName) 未在预期时间内通过健康检查")
+                    }
                 }
             }
         }
@@ -509,6 +573,8 @@ final class Manager: ObservableObject {
 
     func startLocalModel() {
         persist()
+        localModelHealthFailureCount = 0
+        localModelHealthMismatchStatus = nil
         guard FileManager.default.isExecutableFile(atPath: localModelStartPath) else {
             localModelState = .failed("启动程序不存在或不可执行")
             appendLog("✗ 本地模型启动程序无效：\(localModelStartPath)")
@@ -564,6 +630,8 @@ final class Manager: ObservableObject {
         guard canStopLocalModel else { return }
         localModelState = .stopping
         localModelStartDeadline = nil
+        localModelHealthFailureCount = 0
+        localModelHealthMismatchStatus = nil
 
         if let process = localModelProc {
             localModelProc = nil

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "talisman-abyss",
+  "name": "诡箓迷城",
+  "category": "民俗诡谲",
+  "detail": "原创民俗惊奇、墨绿雾城与断续符框",
+  "order": 100,
+  "typography": "elegant",
+  "effects": {
+    "kind": "eldritchInk",
+    "iconStyle": "monochrome",
+    "motion": 0.42,
+    "cornerRadius": 8,
+    "glassBlur": 10,
+    "iconGlow": 0.28,
+    "frame": {
+      "style": "talisman",
+      "width": 1.35,
+      "glow": 0.22
+    }
+  },
+  "light": {
+    "base": "#ECE6D8",
+    "layer1": "#F4EFE4",
+    "layer2": "#DED5C4",
+    "layer3": "#D1C5B1",
+    "sidebar": "#E1D8C8",
+    "border": "#9B826D",
+    "accent": "#9E2B31",
+    "labelPrimary": "#332D28",
+    "labelSecondary": "#65584E",
+    "labelTertiary": "#89796A",
+    "accentSoft": "#E3B8AF"
+  },
+  "dark": {
+    "base": "#08110F",
+    "layer1": "#101A16",
+    "layer2": "#17231D",
+    "layer3": "#202E26",
+    "sidebar": "#0C1512",
+    "border": "#405448",
+    "accent": "#D34A43",
+    "labelPrimary": "#EDE6D9",
+    "labelSecondary": "#BFC6B8",
+    "labelTertiary": "#87978A",
+    "accentSoft": "#4A2926"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.18,
+    "surfaceOpacity": 0.84
+  }
+}

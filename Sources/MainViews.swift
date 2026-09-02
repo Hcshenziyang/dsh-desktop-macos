@@ -7,10 +7,12 @@ import AppKit
 struct ContentView: View {
     // 全局共享的一个manager实例，dsh状态、日志、端口、dsh路径、启动停止方法
     @ObservedObject private var mgr = Manager.shared // boserveobject是告诉界面观察这个对象，属性变化需要重新计算界面
+    @ObservedObject private var themeStore = ThemeStore.shared
     @State private var showSettings = false // 是否显示设置
     @State private var showArchiveManager = false // 是否显示归档管理
     @State private var showContextMemory = false // 是否显示模型上下文与长期记忆
-    @State private var confirmKillExternal = false // 是否显示停止确认框
+    @State private var showThemeSettings = false // 是否显示主题与壁纸设置
+    @State private var dialog: ThemeDialogDescriptor? // 当前主题化确认框
 
     var body: some View {
         VStack(spacing: 0) { // 垂直排列
@@ -20,7 +22,8 @@ struct ContentView: View {
                 if mgr.state.webReady { // if else 只显示一个界面，检查mgr状态，可访问/不可访问
                     WebView(
                         url: mgr.url,
-                        simplifyPluginInventory: mgr.simplifyPluginInventory
+                        simplifyPluginInventory: mgr.simplifyPluginInventory,
+                        theme: themeStore.webSnapshot
                     )
                 } else {
                     placeholderView
@@ -29,6 +32,8 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 920, minHeight: 620)
+        .background(ThemeWindowBackground())
+        .tint(themeStore.appAccentColor)
         .onAppear { mgr.startIfNeeded() }
         .sheet(isPresented: $showSettings) {
             SettingsView()
@@ -39,21 +44,17 @@ struct ContentView: View {
         .sheet(isPresented: $showContextMemory) {
             ContextMemoryView()
         }
-        .alert("停止外部实例", isPresented: $confirmKillExternal) {
-            Button("停止", role: .destructive) { mgr.killExternal() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将向外部 dsh 进程发送终止信号。该进程不是由本应用启动的，确定要停止它吗？")
+        .sheet(isPresented: $showThemeSettings) {
+            ThemeSettingsView(isPresented: $showThemeSettings)
         }
+        .themedDialog(item: $dialog)
     }
 
     // MARK: 工具栏
 
     private var toolbar: some View {
         HStack(spacing: 10) {
-            Circle()
-                .fill(statusColor)
-                .frame(width: 10, height: 10)
+            ThemedStatusIndicator(color: statusColor, isAnimating: serviceStatusIsAnimating)
             Text(statusText).font(.system(.body, weight: .medium))
             Text(mgr.url.absoluteString)
                 .font(.system(.caption, design: .monospaced))
@@ -79,44 +80,57 @@ struct ContentView: View {
             Divider().frame(height: 18)
 
             Button(action: { mgr.toggleLocalModel() }) {
-                Label(localModelButtonText, systemImage: localModelSystemImage)
+                ThemedToolbarIcon(
+                    systemName: localModelSystemImage,
+                    label: localModelButtonText,
+                    isActive: localModelIsActive
+                )
             }
+            .buttonStyle(.plain)
             .disabled(!mgr.canToggleLocalModel)
             .help(localModelHelpText)
 
-            Button(action: { NSWorkspace.shared.open(mgr.url) }) {
-                Label("系统浏览器", systemImage: "safari")
-            }
-            .disabled(!mgr.state.portActive)
-
             if case .externalRunning(let pid) = mgr.state {
-                Button(action: { confirmKillExternal = true }) {
-                    Label("接管并停止", systemImage: "xmark.circle")
+                Button(action: { presentExternalStopDialog() }) {
+                    ThemedToolbarIcon(systemName: "xmark.circle", label: "接管并停止")
                 }
+                .buttonStyle(.plain)
                 .help("停止由其他方式启动的 dsh (pid \(pid))")
             }
 
             Divider().frame(height: 18)
 
             Button(action: { showArchiveManager = true }) {
-                Label("归档管理", systemImage: "archivebox")
-                    .labelStyle(.iconOnly)
+                ThemedToolbarIcon(systemName: "archivebox", label: "归档管理")
             }
+            .buttonStyle(.plain)
             .help("查看、恢复或清理已归档会话")
 
             Button(action: { showContextMemory = true }) {
-                Label("固定输入与记忆", systemImage: "brain")
-                    .labelStyle(.iconOnly)
+                ThemedToolbarIcon(systemName: "brain", label: "固定输入与记忆")
             }
+            .buttonStyle(.plain)
             .help("查看实际 System Prompt、工具/Skill 目录、固定指令与长期记忆")
 
-            Button(action: { showSettings = true }) {
-                Label("设置", systemImage: "gearshape")
+            Button(action: { showThemeSettings = true }) {
+                ThemedToolbarIcon(
+                    systemName: "paintpalette",
+                    label: "主题与壁纸",
+                    isActive: themeStore.hasActiveSkin
+                )
             }
+            .buttonStyle(.plain)
+            .help("配置客户端配色、强调色与静态壁纸")
+
+            Button(action: { showSettings = true }) {
+                ThemedToolbarIcon(systemName: "gearshape", label: "设置")
+            }
+            .buttonStyle(.plain)
+            .help("打开客户端设置")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(ThemeChromeBackground())
     }
 
     private var statusText: String {
@@ -141,12 +155,25 @@ struct ContentView: View {
         }
     }
 
+    private var serviceStatusIsAnimating: Bool {
+        if mgr.isInstallingRuntime { return true }
+        switch mgr.state {
+        case .starting, .stopping: return true
+        default: return false
+        }
+    }
+
     private var localModelButtonText: String {
         switch mgr.localModelState {
-        case .stopped, .failed: return "启动模型"
-        case .starting, .ready: return "停止模型"
-        case .stopping: return "停止中…"
+        case .stopped, .failed: return "启动 \(mgr.localModelDisplayName)"
+        case .starting, .ready: return "停止 \(mgr.localModelDisplayName)"
+        case .stopping: return "正在停止 \(mgr.localModelDisplayName)"
         }
+    }
+
+    private var localModelIsActive: Bool {
+        if case .ready = mgr.localModelState { return true }
+        return false
     }
 
     private var localModelSystemImage: String {
@@ -160,19 +187,32 @@ struct ContentView: View {
     }
 
     private var localModelHelpText: String {
+        let name = mgr.localModelDisplayName
         if mgr.localModelStartExecutable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "请先在设置中配置本地模型启动程序"
+            return "\(name) · 未配置启动程序，请前往设置"
         }
         switch mgr.localModelState {
-        case .stopped: return "启动 \(mgr.localModelDisplayName)"
-        case .starting: return mgr.canStopLocalModel ? "模型正在启动；点击停止" : "模型正在启动"
+        case .stopped: return "\(name) · 点击启动"
+        case .starting: return mgr.canStopLocalModel ? "\(name) · 正在启动，点击停止" : "\(name) · 正在启动"
         case .ready:
             return mgr.canStopLocalModel
-                ? "\(mgr.localModelDisplayName) 已就绪；点击停止"
-                : "模型已就绪；配置停止程序后可从此处停止"
-        case .stopping: return "正在停止 \(mgr.localModelDisplayName)"
-        case .failed(let message): return "本地模型异常：\(message)"
+                ? "\(name) · 已就绪，点击停止"
+                : "\(name) · 已就绪；配置停止程序后可从此处停止"
+        case .stopping: return "\(name) · 正在停止"
+        case .failed(let message): return "\(name) · 异常：\(message)"
         }
+    }
+
+    private func presentExternalStopDialog() {
+        dialog = ThemeDialogDescriptor(
+            title: "停止外部实例？",
+            message: "将向外部 dsh 进程发送终止信号。该进程不是由本应用启动的，确定要停止它吗？",
+            systemImage: "exclamationmark.octagon.fill",
+            tone: .danger,
+            primaryTitle: "停止",
+            primaryRole: .destructive,
+            primaryAction: { mgr.killExternal() }
+        )
     }
 
     // MARK: 未运行时的占位页
@@ -195,7 +235,8 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
             } else if mgr.dshPath.isEmpty {
                 if case .failed(let msg) = mgr.state {
-                    Text(msg).foregroundColor(.red).font(.callout)
+                    ThemedStatusBanner(message: msg, tone: .danger)
+                        .frame(maxWidth: 520)
                 } else {
                     Text("未找到 DeepSeek Harness 运行时")
                         .foregroundColor(.secondary)
@@ -215,14 +256,15 @@ struct ContentView: View {
                 .controlSize(.large)
                 .disabled(!mgr.canStart)
             } else if case .failed(let msg) = mgr.state {
-                Text(msg).foregroundColor(.red).font(.callout)
+                ThemedStatusBanner(message: msg, tone: .danger)
+                    .frame(maxWidth: 520)
             } else {
                 ProgressView().controlSize(.small)
                 Text("正在启动…").foregroundColor(.secondary)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ThemeWindowBackground())
     }
 }
 // MARK: - 设置
@@ -230,7 +272,7 @@ struct ContentView: View {
 struct SettingsView: View {
     @ObservedObject private var mgr = Manager.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var confirmKillExternal = false
+    @State private var dialog: ThemeDialogDescriptor?
 
     private let portFormatter: NumberFormatter = {
         let f = NumberFormatter()
@@ -248,7 +290,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
-            .background(.bar)
+            .background(ThemeChromeBackground())
 
             Divider()
 
@@ -314,7 +356,7 @@ struct SettingsView: View {
                                 Spacer()
                                 if case .externalRunning(let pid) = mgr.state {
                                     Button(role: .destructive) {
-                                        confirmKillExternal = true
+                                        presentExternalStopDialog()
                                     } label: {
                                         Label("停止外部实例 (pid \(pid))", systemImage: "xmark.circle")
                                     }
@@ -364,9 +406,10 @@ struct SettingsView: View {
                                     .font(.system(.body, design: .monospaced))
                             }
                             HStack(spacing: 10) {
-                                Circle()
-                                    .fill(localModelStatusColor)
-                                    .frame(width: 9, height: 9)
+                                ThemedStatusIndicator(
+                                    color: localModelStatusColor,
+                                    isAnimating: localModelStatusIsAnimating
+                                )
                                 Text(localModelStatusText)
                                 Spacer()
                                 Toggle("退出应用时停止本地模型", isOn: $mgr.stopLocalModelOnQuit)
@@ -421,9 +464,10 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .background(.bar)
+            .background(ThemeChromeBackground())
         }
         .frame(width: 720, height: 600)
+        .background(ThemeWindowBackground())
         .onChange(of: mgr.port) { _ in
             mgr.persist(); mgr.refreshExternal()
         }
@@ -445,12 +489,7 @@ struct SettingsView: View {
             mgr.persist(); mgr.refreshLocalModel()
         }
         .onChange(of: mgr.stopLocalModelOnQuit) { _ in mgr.persist() }
-        .alert("停止外部实例", isPresented: $confirmKillExternal) {
-            Button("停止", role: .destructive) { mgr.killExternal() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将向外部 dsh 进程发送终止信号。该进程不是由本应用启动的，确定要停止它吗？")
-        }
+        .themedDialog(item: $dialog)
     }
 
     private func pickPath() {
@@ -463,6 +502,18 @@ struct SettingsView: View {
             mgr.dshPath = u.path
             mgr.persist()
         }
+    }
+
+    private func presentExternalStopDialog() {
+        dialog = ThemeDialogDescriptor(
+            title: "停止外部实例？",
+            message: "将向外部 dsh 进程发送终止信号。该进程不是由本应用启动的，确定要停止它吗？",
+            systemImage: "exclamationmark.octagon.fill",
+            tone: .danger,
+            primaryTitle: "停止",
+            primaryRole: .destructive,
+            primaryAction: { mgr.killExternal() }
+        )
     }
 
     private var localModelStatusText: String {
@@ -481,6 +532,13 @@ struct SettingsView: View {
         case .starting, .stopping: return .orange
         case .ready: return .green
         case .failed: return .red
+        }
+    }
+
+    private var localModelStatusIsAnimating: Bool {
+        switch mgr.localModelState {
+        case .starting, .stopping: return true
+        default: return false
         }
     }
 

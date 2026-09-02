@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "cute-cloud-cats",
+  "name": "云端软糖",
+  "category": "可爱",
+  "detail": "云朵、猫咪与柔和粉彩",
+  "order": 30,
+  "typography": "rounded",
+  "effects": {
+    "kind": "bubbles",
+    "iconStyle": "playful",
+    "motion": 0.62,
+    "cornerRadius": 20,
+    "glassBlur": 16,
+    "iconGlow": 0.46,
+    "frame": {
+      "style": "stitched",
+      "width": 1.25,
+      "glow": 0.22
+    }
+  },
+  "light": {
+    "base": "#FFF5F7",
+    "layer1": "#FFFBFD",
+    "layer2": "#F8EAF2",
+    "layer3": "#F2DFEB",
+    "sidebar": "#FBEAF3",
+    "border": "#E7BED1",
+    "accent": "#D96F9D",
+    "labelPrimary": "#4A3040",
+    "labelSecondary": "#79586B",
+    "labelTertiary": "#A07A90",
+    "accentSoft": "#FAD4E5"
+  },
+  "dark": {
+    "base": "#241820",
+    "layer1": "#30212A",
+    "layer2": "#3B2934",
+    "layer3": "#49333F",
+    "sidebar": "#2A1C25",
+    "border": "#6A495A",
+    "accent": "#FF9BC4",
+    "labelPrimary": "#FFF3F8",
+    "labelSecondary": "#E5C3D2",
+    "labelTertiary": "#B98FA4",
+    "accentSoft": "#5C3045"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.05,
+    "surfaceOpacity": 0.82
+  }
+}

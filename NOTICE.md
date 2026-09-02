@@ -17,6 +17,14 @@ contributors, where applicable, and are distributed under the same MIT License.
 `Resources/AppIcon.icns` was generated from the upstream project's MIT-licensed icon
 source and remains covered by the attribution and license above.
 
+## Bundled theme artwork
+
+The eleven wallpapers under `Resources/Themes/` were generated specifically for this project
+with OpenAI ImageGen on 2026-09-01 and 2026-09-02, without external reference images. Each isolated theme
+directory contains a `CREDITS.md` file recording its generation prompt. To the extent any
+rights exist in these generated assets, they are distributed with this repository under the
+MIT License. No third-party stock wallpaper, public-figure likeness, or extracted franchise asset is bundled.
+
 ## Project lineage and scope
 
 Beginning with `v0.1.0`, DSH Desktop Community has its own project name, semantic

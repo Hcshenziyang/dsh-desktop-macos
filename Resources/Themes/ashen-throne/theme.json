@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "ashen-throne",
+  "name": "灰烬王庭",
+  "category": "黑暗史诗",
+  "detail": "原创末世王城、残月灰烬与风化重框",
+  "order": 120,
+  "typography": "elegant",
+  "effects": {
+    "kind": "ashRunes",
+    "iconStyle": "hierarchical",
+    "motion": 0.25,
+    "cornerRadius": 7,
+    "glassBlur": 8,
+    "iconGlow": 0.22,
+    "frame": {
+      "style": "weathered",
+      "width": 1.50,
+      "glow": 0.12
+    }
+  },
+  "light": {
+    "base": "#ECEAE4",
+    "layer1": "#F5F3EE",
+    "layer2": "#DDDAD2",
+    "layer3": "#CFCCC3",
+    "sidebar": "#DEDBD3",
+    "border": "#9C978D",
+    "accent": "#82643A",
+    "labelPrimary": "#302E2A",
+    "labelSecondary": "#5F5B53",
+    "labelTertiary": "#807C73",
+    "accentSoft": "#DDCFB5"
+  },
+  "dark": {
+    "base": "#0F0F0E",
+    "layer1": "#181816",
+    "layer2": "#22211E",
+    "layer3": "#2D2B27",
+    "sidebar": "#141412",
+    "border": "#504B43",
+    "accent": "#D0A463",
+    "labelPrimary": "#EEEAE0",
+    "labelSecondary": "#C5BEB1",
+    "labelTertiary": "#918A7E",
+    "accentSoft": "#463823"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.17,
+    "surfaceOpacity": 0.86
+  }
+}

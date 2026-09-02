@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "neon-rain-city",
+  "name": "霓雨协议",
+  "category": "赛博朋克",
+  "detail": "电光雨幕、深城玻璃与双层霓虹边框",
+  "order": 70,
+  "typography": "modern",
+  "effects": {
+    "kind": "neonRain",
+    "iconStyle": "luminous",
+    "motion": 0.86,
+    "cornerRadius": 10,
+    "glassBlur": 20,
+    "iconGlow": 0.90,
+    "frame": {
+      "style": "neon",
+      "width": 1.20,
+      "glow": 0.95
+    }
+  },
+  "light": {
+    "base": "#E8F4F8",
+    "layer1": "#F2F9FB",
+    "layer2": "#D6EAF0",
+    "layer3": "#C5DCE5",
+    "sidebar": "#D7E8EE",
+    "border": "#75AFC0",
+    "accent": "#009EC9",
+    "labelPrimary": "#102D3A",
+    "labelSecondary": "#355D6B",
+    "labelTertiary": "#64838E",
+    "accentSoft": "#B9EDF4"
+  },
+  "dark": {
+    "base": "#060A18",
+    "layer1": "#0B1026",
+    "layer2": "#101A34",
+    "layer3": "#172342",
+    "sidebar": "#080E20",
+    "border": "#254D6B",
+    "accent": "#38E6FF",
+    "labelPrimary": "#F2FAFF",
+    "labelSecondary": "#B7D5E5",
+    "labelTertiary": "#718DA5",
+    "accentSoft": "#123B53"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.12,
+    "surfaceOpacity": 0.76
+  }
+}

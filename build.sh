@@ -48,6 +48,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" .build/bin \
 echo "==> Copying app icon"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 cp -R Resources/RequestInspector "$APP/Contents/Resources/RequestInspector"
+cp -R Resources/Themes "$APP/Contents/Resources/Themes"
 
 echo "==> Compiling for: $ARCHS"
 SDK_CANDIDATES=()

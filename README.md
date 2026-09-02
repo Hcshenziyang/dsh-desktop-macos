@@ -18,13 +18,14 @@ Web UI。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
 - 原生 SwiftUI + WebKit macOS 应用，不引入第三方 App 依赖
 - 同时支持 Apple Silicon 与 Intel Mac
 - 检测已有 `dsh web` 服务，或从应用中启动、停止和重启服务
-- 在浏览器中打开、登录时启动、实时日志和常用运行控制
+- 登录时启动、实时日志和常用运行控制
 - 检测 Homebrew、npm、nvm、WorkBuddy 及常见 DSH 安装位置
 - 缺少运行时时，可单独安装官方 npm 包 `@deepseek-ai/dsh`
 - 可配置的本地模型服务按钮，可启动和停止用户选择的程序或脚本
 - 原生归档管理，可查看、恢复、逐条删除或清空 DSH 已归档会话
 - 简化内嵌插件列表，默认聚焦用户安装和异常运行单元，官方组件保留在高级视图
 - 原生“固定输入与记忆”检查器，可查看最终系统提示、工具/Skill 目录和本地长期记忆
+- 数据驱动的完整皮肤模块，内置十一套原创主题并支持自定义强调色和本机静态壁纸
 
 ## 系统要求
 
@@ -60,7 +61,7 @@ ARCHS="$(uname -m)" ./build.sh
 
 ## 版本与发布
 
-当前版本为 `v0.1.0`，应用内部版本为 `0.1.0 (1)`。项目使用语义化版本号；推送 `v*`
+当前版本为 `v0.1.2`，应用内部版本为 `0.1.2 (12)`。项目使用语义化版本号；推送 `v*`
 标签会触发 macOS 通用版构建，并在本仓库创建对应的 GitHub Release。各版本变化见
 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -69,8 +70,8 @@ ARCHS="$(uname -m)" ./build.sh
 
 ## 本地模型服务
 
-工具栏提供通用的“启动模型 / 停止模型”按钮。首次使用时在“设置 → 本地模型服务”中
-配置：
+工具栏提供通用的本地模型图标按钮；鼠标悬停会显示模型名称、状态和当前动作。首次使用时
+在“设置 → 本地模型服务”中配置：
 
 - 显示名称，例如 `Qwen 27B`、`MLX Server` 或 `Ollama`
 - 启动程序：可执行文件，或具有执行权限并包含正确 shebang 的脚本
@@ -91,6 +92,10 @@ ARCHS="$(uname -m)" ./build.sh
 应用使用 `Process` 直接执行所选程序，并把参数作为数组传递，不交给 Shell 解释。因此不
 支持 `|`、`&&`、重定向、环境变量展开或 `$()` 命令替换。所选程序拥有当前 macOS 用户的
 权限，只应配置自己编写或已确认可信的程序。仓库不会附带、下载或分发模型权重。
+
+健康检查只有收到 HTTP `2xx` 或 `3xx` 才会判定模型就绪。`4xx`/`5xx` 会显示具体状态码和
+“端口可能被其他服务占用”，连接失败则按启动超时或连续失败处理，避免其他本地服务碰巧占用
+同一端口时把按钮错误显示为“模型已就绪”。
 
 ## 归档管理
 
@@ -120,8 +125,52 @@ Web UI 组件也会平铺在同一列表中。客户端默认对**内嵌 Web UI*
 该功能只操作 WKWebView 中已经渲染的 DOM，不修改 DSH 核心、profile 配置或
 `node_modules`。它依赖上游插件卡片公开的 `data-plugin-entry`、`data-phase` 和
 `data-enabled` 属性；如果未来 DSH 改变界面结构，增强层找不到这些标记时会停止处理，原始
-列表仍可使用。可以在客户端“设置”中关闭“简化内嵌 Web UI 的插件列表”。通过“系统浏览器”
-打开 DSH 时仍显示上游原始界面。
+列表仍可使用。可以在客户端“设置”中关闭“简化内嵌 Web UI 的插件列表”。
+
+## 主题与壁纸
+
+工具栏的调色盘按钮会打开独立“主题与壁纸”设置。当前支持：
+
+- DSH 原生、松雾、深海和暖砂配色预设
+- 十一套完整皮肤：星轨次元、留白秩序、云端软糖、海岬初晓、霓雨协议、猫耳心跳、花火映像、
+  诡箓迷城、龙焰秘典、灰烬王庭和方块晴野
+- 完整皮肤会共同调整背景、侧栏、消息气泡、输入框、按钮、悬停/选中态、文字层级、代码块、
+  滚动条、阴影、字体倾向，以及 macOS 原生工具栏和管理窗口
+- 弹窗、错误/成功状态、快捷图标、圆角与玻璃模糊使用同一主题参数；十一套皮肤分别提供星轨、
+  纸面、浮泡、海雾、霓雨、猫爪星糖、花影、诡墨、龙焰、灰烬和像素动效，并遵循
+  macOS“减少动态效果”设置
+- 软边、霓虹、缝线、花影、诡箓、秘法双线、风化和像素硬边组成独立框体系统，覆盖会话卡片、
+  工作区、输入框、菜单、代码块、状态提示和确认弹窗
+- 会话历史与工作区分组使用主题化卡片、轮换小图标、选中边框和悬停动画；搜索结果、列表选项
+  与插件卡片也会获得一致但更轻的反馈
+- 自定义强调色，并同步应用到 Web UI 语义色与客户端原生控件
+- PNG、JPEG、HEIC、WebP、TIFF 静态壁纸，单个文件最大 50 MB
+- 填充、适应、居中和平铺显示方式
+- 壁纸模糊、暗化和面板不透明度实时调节
+- 一键关闭全部增强或恢复 DSH 原生外观
+
+主题模块不会修改 DSH 核心、Web profile 或 `node_modules`。它以 DSH 的 `--dsw-*` 语义
+颜色令牌为边界，同时为浅色和深色状态生成覆盖值，因此 DSH 切换外观时无需重启。每套内置
+主题都是一个独立、数据驱动的目录：
+
+```text
+Resources/Themes/<theme-id>/
+├── theme.json       完整浅/深配色、字体、动效、图标、框体与壁纸参数
+├── wallpaper.png    该主题独享的原创素材
+└── CREDITS.md       素材来源和生成提示词
+```
+
+内置主题不能跨目录引用素材。十一张内置壁纸均为本项目使用 OpenAI ImageGen 原创生成，没有
+抓取网络图片或使用外部参考图；人物均为虚构成年人，题材主题不包含现实公众人物肖像或现有
+作品的角色、Logo 和提取纹理。用户自己选择的壁纸则以随机文件名复制到：
+
+```text
+~/Library/Application Support/io.github.dramtea.dsh-desktop-community/Themes/
+```
+
+WKWebView 通过客户端私有的 `dsh-desktop-theme://` 资源通道读取内置主题或用户副本；页面
+看不到原始图片路径，DSH HTTP 服务也无法通过该通道读取其他文件。移除自选壁纸或恢复默认
+只会删除客户端副本，不修改用户选择时的原始图片。壁纸和配置不会上传。
 
 ## 模型固定输入与长期记忆
 
@@ -166,11 +215,17 @@ Sources/MainViews.swift       主界面与设置界面
 Sources/Archive.swift         归档数据、管理逻辑与界面
 Sources/ContextMemory.swift   模型固定输入与长期记忆查看器
 Sources/InspectorSupport.swift 检查器资源、缓存与临时 Patch
+Sources/ThemeModel.swift      主题配置、预设注册表、持久化与壁纸资产管理
+Sources/ThemeWebBridge.swift  Web 主题快照、语义令牌注入与私有资源通道
+Sources/ThemeWebComponents.swift 会话历史、工作区与同类 Web 组件的深度皮肤
+Sources/ThemeWebFrames.swift Web 菜单、输入框、代码块、弹窗与卡片的框体语言
+Sources/ThemeViews.swift      独立主题与壁纸设置界面
 Sources/WebView.swift         内嵌 Web UI 与插件列表增强
 Package.swift                 SwiftPM 模块描述，用于编辑器索引与跨文件跳转
 .sourcekit-lsp/config.json    SourceKit-LSP 索引配置
 Resources/AppIcon.icns        App 图标资源
 Resources/RequestInspector/   DSH 请求边界只读观察插件
+Resources/Themes/             相互隔离的内置完整主题包与原创素材
 Info.plist                    macOS Bundle 元数据
 build.sh                      通用 macOS App 构建脚本
 script/build_and_run.sh       本地构建、启动和调试入口

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "voxel-horizon",
+  "name": "方块晴野",
+  "category": "像素方块",
+  "detail": "原创体素晴空、阶梯投影与硬朗像素框",
+  "order": 130,
+  "typography": "rounded",
+  "effects": {
+    "kind": "pixels",
+    "iconStyle": "playful",
+    "motion": 0.50,
+    "cornerRadius": 6,
+    "glassBlur": 4,
+    "iconGlow": 0.20,
+    "frame": {
+      "style": "pixel",
+      "width": 2.00,
+      "glow": 0.10
+    }
+  },
+  "light": {
+    "base": "#F1FAEF",
+    "layer1": "#FAFFF8",
+    "layer2": "#DFF1DC",
+    "layer3": "#CEE7CB",
+    "sidebar": "#DCEFDA",
+    "border": "#8DBA91",
+    "accent": "#278F68",
+    "labelPrimary": "#203B2E",
+    "labelSecondary": "#4D6C5A",
+    "labelTertiary": "#76917F",
+    "accentSoft": "#BFE9D0"
+  },
+  "dark": {
+    "base": "#132019",
+    "layer1": "#1B2B22",
+    "layer2": "#24372C",
+    "layer3": "#304637",
+    "sidebar": "#17261E",
+    "border": "#476C55",
+    "accent": "#6CE1A7",
+    "labelPrimary": "#F0FAF2",
+    "labelSecondary": "#C2DDC9",
+    "labelTertiary": "#8FAC98",
+    "accentSoft": "#28553D"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0,
+    "surfaceOpacity": 0.83
+  }
+}

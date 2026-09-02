@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 3,
+  "id": "hanabi-muse",
+  "name": "花火映像",
+  "category": "日系写真",
+  "detail": "原创日系时装人物、雨庭暖光与细致花影边框",
+  "order": 90,
+  "typography": "elegant",
+  "effects": {
+    "kind": "bloom",
+    "iconStyle": "hierarchical",
+    "motion": 0.28,
+    "cornerRadius": 14,
+    "glassBlur": 14,
+    "iconGlow": 0.18,
+    "frame": {
+      "style": "floral",
+      "width": 0.90,
+      "glow": 0.14
+    }
+  },
+  "light": {
+    "base": "#F5F1E9",
+    "layer1": "#FBF8F2",
+    "layer2": "#EDE7DD",
+    "layer3": "#E2D9CD",
+    "sidebar": "#EEE8DE",
+    "border": "#BFAE9D",
+    "accent": "#2E7C77",
+    "labelPrimary": "#253735",
+    "labelSecondary": "#576B67",
+    "labelTertiary": "#7E8D88",
+    "accentSoft": "#CDE2DC"
+  },
+  "dark": {
+    "base": "#11191A",
+    "layer1": "#182324",
+    "layer2": "#202D2E",
+    "layer3": "#2A3939",
+    "sidebar": "#151F20",
+    "border": "#465D5B",
+    "accent": "#75C8BF",
+    "labelPrimary": "#F5F1E9",
+    "labelSecondary": "#C8D4D0",
+    "labelTertiary": "#93A6A1",
+    "accentSoft": "#284B48"
+  },
+  "wallpaper": {
+    "filename": "wallpaper.png",
+    "mode": "fill",
+    "blur": 0,
+    "dimming": 0.08,
+    "surfaceOpacity": 0.80
+  }
+}
