@@ -3,6 +3,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/swift-toolchain.sh
 
+swift --version
+DSH_TEST_HELP="$(swift test --help)"
+if [[ "$DSH_TEST_HELP" != *--disable-xctest* ]]; then
+    echo "Regression tests require Swift 6 or newer. Select Xcode 16+ or compatible Command Line Tools." >&2
+    exit 1
+fi
+
 # Command Line Tools ship Swift Testing as a framework outside the SDK.
 DSH_TEST_FLAGS=()
 DSH_DEVELOPER_DIR="$(xcode-select -p)"

@@ -11,6 +11,8 @@ permissions:
 jobs:
   macos:
     runs-on: macos-14
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
       - name: Validate metadata
