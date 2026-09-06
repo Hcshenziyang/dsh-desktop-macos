@@ -13,6 +13,8 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - name: Run module and regression checks
+        run: ./scripts/test.sh
       - name: Build universal macOS app
         env:
           VERSION: ${{ github.ref_name }}

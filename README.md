@@ -24,6 +24,7 @@ Web UI。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
 - 可配置的本地模型服务按钮，可启动和停止用户选择的程序或脚本
 - 原生归档管理，可查看、恢复、逐条删除或清空 DSH 已归档会话
 - 简化内嵌插件列表，默认聚焦用户安装和异常运行单元，官方组件保留在高级视图
+- 原生插件管理，支持版本检查、逐个更新、运行状态检查与完整环境备份恢复
 - 原生“固定输入与记忆”检查器，可查看最终系统提示、工具/Skill 目录和本地长期记忆
 - 数据驱动的完整皮肤模块，内置十一套原创主题并支持自定义强调色和本机静态壁纸
 
@@ -127,6 +128,30 @@ Web UI 组件也会平铺在同一列表中。客户端默认对**内嵌 Web UI*
 `data-enabled` 属性；如果未来 DSH 改变界面结构，增强层找不到这些标记时会停止处理，原始
 列表仍可使用。可以在客户端“设置”中关闭“简化内嵌 Web UI 的插件列表”。
 
+## 插件管理与更新
+
+工具栏的拼图按钮打开原生“插件管理”窗口，显示 Web profile 中用户插件的实际安装版本、
+版本约束、最新版本和运行状态。“检查更新”使用本机 pnpm 和当前 registry 配置查询 npm
+的 `latest` 标签，逐个显示网络错误。需要已安装 pnpm。Git、本地目录、tarball 和 npm
+别名来源暂不提供一键更新，应按原始来源维护。官方内置组件随 DSH 运行时升级。
+
+确认“更新”后，客户端停止自己管理的服务，备份整个 `profiles/web`（包括配置、锁文件和
+`node_modules`），执行 `dsh plugin --profile web update 包名@已检查的目标版本`，随后
+启动服务并根据 Loader 的实际运行单元检查插件。目标版本可能跨越现有约束。原本停止的
+服务也会启动以完成验证；请在会话空闲时操作。外部启动的服务需要先自行停止，操作期间
+不要同时在终端管理插件。
+
+完整备份保存在 `~/.dsh/backups/plugin-manager/web/`（遵循 `DSH_HOME`）。安装失败时
+不会启动可能不完整的环境；安装、启动或加载验证失败均会保留错误和恢复入口。“恢复”会
+将**整个 Web profile** 回到选定备份的状态，恢复前另存当前环境，再启动服务检查。恢复
+已复制的插件文件不需要联网；本地链接指向的外部源码不包含在备份中。备份不会自动删除，
+可通过窗口内的 Finder 按钮管理其磁盘占用。
+
+运行状态由客户端启动时挂载的只读 Loader 观察模块提供，仅记录模块名、启用状态、加载
+阶段、进程 ID 和时间戳，写入用户私有缓存。外部实例或没有该模块的旧实例显示“状态未
+验证 / 暂不可用”，从客户端重新启动后即可读取。未知或未发现的运行单元不会被当作加载
+成功。
+
 ## 主题与壁纸
 
 工具栏的调色盘按钮会打开独立“主题与壁纸”设置。当前支持：
@@ -209,30 +234,31 @@ Prompt 或工具执行轨迹；客户端依据它的 `skill-catalog` 来源元�
 ## 项目结构
 
 ```text
-Sources/DSHLauncherApp.swift  应用入口与 macOS 生命周期
-Sources/Manager.swift         DSH、本地模型与进程管理
-Sources/MainViews.swift       主界面与设置界面
-Sources/Archive.swift         归档数据、管理逻辑与界面
-Sources/ContextMemory.swift   模型固定输入与长期记忆查看器
-Sources/InspectorSupport.swift 检查器资源、缓存与临时 Patch
-Sources/ThemeModel.swift      主题配置、预设注册表、持久化与壁纸资产管理
-Sources/ThemeWebBridge.swift  Web 主题快照、语义令牌注入与私有资源通道
-Sources/ThemeWebComponents.swift 会话历史、工作区与同类 Web 组件的深度皮肤
-Sources/ThemeWebFrames.swift Web 菜单、输入框、代码块、弹窗与卡片的框体语言
-Sources/ThemeViews.swift      独立主题与壁纸设置界面
-Sources/WebView.swift         内嵌 Web UI 与插件列表增强
-Package.swift                 SwiftPM 模块描述，用于编辑器索引与跨文件跳转
-.sourcekit-lsp/config.json    SourceKit-LSP 索引配置
-Resources/AppIcon.icns        App 图标资源
-Resources/RequestInspector/   DSH 请求边界只读观察插件
-Resources/Themes/             相互隔离的内置完整主题包与原创素材
-Info.plist                    macOS Bundle 元数据
-build.sh                      通用 macOS App 构建脚本
-script/build_and_run.sh       本地构建、启动和调试入口
-scripts/package.sh            ZIP、DMG 与校验文件打包脚本
-.github/workflows/            macOS CI 与 Release 工作流
-CHANGELOG.md                  版本变更记录
+Sources/App/                 应用生命周期、窗口与功能组装
+Sources/Core/Runtime/        DSH 运行时、启动准备与维护协调
+Sources/Core/System/         进程、命令、路径和日志等系统能力
+Sources/Core/Web/            通用 WebKit 容器（独立 DSHWeb 模块）
+Sources/UI/                  共用主题、控件与 Web 主题渲染
+Sources/Features/LocalModel/ 本地模型服务、设置与工具栏入口
+Sources/Features/Archive/    归档模型、磁盘操作、状态与界面
+Sources/Features/Inspector/  固定输入与记忆的读取、观察器和界面
+Sources/Features/Plugins/    DSH 插件管理、状态观察与 Web 增强
+Sources/Features/Themes/     主题设置界面
+Package.swift                构建、测试与编辑器共用的模块依赖图
+Tests/                       功能行为和模块边界回归测试
+Resources/RequestInspector/  请求观察模块资源
+Resources/PluginInventory/   插件状态观察模块资源
+Resources/Themes/            独立主题包与素材
+build.sh                     通用 macOS App 构建、资源组装和签名
+scripts/test.sh              依赖边界、Swift 与 Node 回归检查
+scripts/package.sh           ZIP、DMG 与校验文件打包
+script/build_and_run.sh       本地构建、启动和调试
+.github/workflows/           CI 与 Release 工作流
 ```
+
+这些是客户端内部模块。当前没有动态加载或安装客户端插件的框架；`Plugins` 管理的是
+DSH 运行时插件。功能之间不直接依赖，由 `AppContainer` 组装，模块依赖在 `Package.swift`
+中显式声明。
 
 ## 来源、许可与商标
 

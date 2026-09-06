@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 import AppKit
-@preconcurrency import WebKit
+import DSHCore
 
 // MARK: - 内嵌 DSH 界面
 
@@ -248,99 +248,19 @@ func pluginInventoryEnhancementScript(enabled: Bool, userPackages: [String]) -> 
     """#
 }
 
-private func pluginInventoryPreferenceScript(enabled: Bool, userPackages: [String]) -> String {
+func pluginInventoryPreferenceScript(enabled: Bool, userPackages: [String]) -> String {
     let enabledLiteral = enabled ? "true" : "false"
     let packagesLiteral = javascriptJSON(userPackages, fallback: "[]")
     return "window.__dshDesktopPluginInventory?.configure(\(enabledLiteral), \(packagesLiteral));"
 }
 
-struct WebView: NSViewRepresentable {
-    let url: URL
-    let simplifyPluginInventory: Bool
-    let theme: ThemeWebSnapshot
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> WKWebView {
-        let packages = webProfileUserPluginPackages()
-        let configuration = WKWebViewConfiguration()
-        configuration.setURLSchemeHandler(
-            ThemeAssetSchemeHandler(),
-            forURLScheme: ThemeAssetRepository.scheme
-        )
-        configuration.userContentController.addUserScript(WKUserScript(
-            source: themeEnhancementScript(snapshot: theme),
-            injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
-        ))
-        configuration.userContentController.addUserScript(WKUserScript(
-            source: pluginInventoryEnhancementScript(
-                enabled: simplifyPluginInventory,
-                userPackages: packages
-            ),
-            injectionTime: .atDocumentEnd,
-            forMainFrameOnly: true
-        ))
-        let web = WKWebView(frame: .zero, configuration: configuration)
-        web.navigationDelegate = context.coordinator
-        context.coordinator.lastURL = url
-        context.coordinator.simplifyPluginInventory = simplifyPluginInventory
-        context.coordinator.userPluginPackages = packages
-        context.coordinator.theme = theme
-        web.load(URLRequest(url: url))
-        return web
+package enum PluginWebEnhancement {
+    package static func userPackages() -> [String] { webProfileUserPluginPackages() }
+    package static func script(enabled: Bool, packages: [String]) -> String {
+        pluginInventoryEnhancementScript(enabled: enabled, userPackages: packages)
     }
-
-    func updateNSView(_ nsView: WKWebView, context: Context) {
-        let packages = webProfileUserPluginPackages()
-        context.coordinator.simplifyPluginInventory = simplifyPluginInventory
-        context.coordinator.userPluginPackages = packages
-        context.coordinator.theme = theme
-        context.coordinator.applyPluginInventoryPreferences(to: nsView)
-        context.coordinator.applyThemePreferences(to: nsView)
-        guard context.coordinator.lastURL != url else { return }
-        context.coordinator.lastURL = url
-        nsView.load(URLRequest(url: url))
-    }
-
-    final class Coordinator: NSObject, WKNavigationDelegate {
-        var lastURL: URL?
-        var simplifyPluginInventory = true
-        var userPluginPackages: [String] = []
-        var theme = ThemeWebSnapshot(
-            enabled: false,
-            lightTokens: [:],
-            darkTokens: [:],
-            effects: .standard,
-            wallpaper: nil
-        )
-
-        func applyPluginInventoryPreferences(to webView: WKWebView) {
-            webView.evaluateJavaScript(pluginInventoryPreferenceScript(
-                enabled: simplifyPluginInventory,
-                userPackages: userPluginPackages
-            ))
-        }
-
-        func applyThemePreferences(to webView: WKWebView) {
-            webView.evaluateJavaScript(themePreferenceScript(snapshot: theme))
-        }
-
-        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            applyThemePreferences(to: webView)
-            applyPluginInventoryPreferences(to: webView)
-        }
-
-        func webView(_ webView: WKWebView,
-                     decidePolicyFor navigationAction: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            if navigationAction.targetFrame == nil, let u = navigationAction.request.url {
-                // 新窗口链接交给系统浏览器
-                NSWorkspace.shared.open(u)
-                decisionHandler(.cancel)
-            } else {
-                decisionHandler(.allow)
-            }
-        }
+    package static func update(enabled: Bool, packages: [String]) -> String {
+        pluginInventoryPreferenceScript(enabled: enabled, userPackages: packages)
     }
 }

@@ -14,6 +14,8 @@ func requestInspectorResources() -> RequestInspectorResources? {
     let sourceRoot = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
         .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
     directories.append(sourceRoot.appendingPathComponent("Resources/RequestInspector", isDirectory: true))
 
     for directory in directories {

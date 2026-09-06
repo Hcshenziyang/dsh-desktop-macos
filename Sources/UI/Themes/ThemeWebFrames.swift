@@ -4,7 +4,7 @@ import Foundation
 
 /// 将主题清单里的 frame 参数扩展到 DSH 的通用控件。
 /// 选择器只依赖语义角色和稳定 HTML 元素；上游 CSS Module 改名时仍可安全退化。
-func themeWebFrameStyles() -> String {
+package func themeWebFrameStyles() -> String {
     #"""
     body[data-dsh-desktop-theme="true"] :is(
       [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"],
@@ -122,6 +122,71 @@ func themeWebFrameStyles() -> String {
     }
     body[data-dsh-desktop-frame-style="pixel"] * {
       transition-timing-function: steps(3, end) !important;
+    }
+
+    /*
+     * 收起后的侧栏是上游严格定义的 36px 图标轨道。主题的卡片边框、阴影和
+     * brand mark 尺寸如果继续套用，会让各按钮拥有不同的外框和视觉中心。
+     * 只在 rail/collapsed 状态恢复统一几何；展开侧栏仍保留完整主题语言。
+     */
+    body[data-dsh-desktop-theme="true"] [class*="_collapsed"] [class*="_brandMark"] {
+      box-sizing: border-box;
+      width: 24px !important;
+      height: 24px !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+    }
+    body[data-dsh-desktop-theme="true"] [class*="_collapsed"] button[class*="_newSession"] {
+      box-sizing: border-box;
+      width: 36px !important;
+      height: 36px !important;
+      margin-inline: 0 !important;
+      padding: 0 !important;
+      border: 1px solid transparent !important;
+      border-radius: 50% !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+    }
+    body[data-dsh-desktop-theme="true"] [class*="_collapsed"] button[class*="_newSession"]:hover {
+      background: var(--dsw-alias-interactive-bg-hover) !important;
+    }
+    body[data-dsh-desktop-theme="true"] [class*="_rail"] [class*="_sectionHeader"] {
+      box-sizing: border-box;
+      width: 36px !important;
+      height: 36px !important;
+      padding: 0 !important;
+      border: 1px solid transparent !important;
+      border-radius: 12px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+    }
+    body[data-dsh-desktop-theme="true"] [class*="_rail"] :is(
+      [class*="_iconButton"], [class*="_searchButton"]
+    ) {
+      box-sizing: border-box;
+      width: 36px !important;
+      height: 36px !important;
+      margin-inline: 0 !important;
+      padding: 0 !important;
+      border: 1px solid transparent !important;
+      border-radius: 50% !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      outline: 0 !important;
+      transform: none !important;
+    }
+    body[data-dsh-desktop-theme="true"] [class*="_rail"] :is(
+      [class*="_iconButton"], [class*="_searchButton"]
+    ):hover {
+      background: var(--dsw-alias-interactive-bg-hover) !important;
     }
     """#
 }

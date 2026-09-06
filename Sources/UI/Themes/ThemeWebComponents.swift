@@ -6,7 +6,7 @@ import Foundation
 ///
 /// 会话与工作区首先依赖 WAI-ARIA (`treeitem` + `aria-selected/aria-expanded`)；
 /// CSS Module 名称只用于标题和按钮等渐进增强。上游改名时，卡片主体仍然保持可用。
-func themeWebComponentStyles() -> String {
+package func themeWebComponentStyles() -> String {
     #"""
     body[data-dsh-desktop-theme="true"] {
       --dsh-history-glyph-1: "◇";

@@ -1,4 +1,5 @@
 .build/
+/docs/
 .DS_Store
 .swiftpm/
 .sourcekit-lsp-build/

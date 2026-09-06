@@ -4,15 +4,15 @@ import ImageIO
 
 // MARK: - 主题配置模型
 
-enum WallpaperDisplayMode: String, Codable, CaseIterable, Identifiable {
+package enum WallpaperDisplayMode: String, Codable, CaseIterable, Identifiable {
     case fill
     case fit
     case center
     case tile
 
-    var id: String { rawValue }
+    package var id: String { rawValue }
 
-    var title: String {
+    package var title: String {
         switch self {
         case .fill: return "填充"
         case .fit: return "适应"
@@ -22,33 +22,33 @@ enum WallpaperDisplayMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct ThemePaletteColors: Codable, Equatable {
-    let base: String
-    let layer1: String
-    let layer2: String
-    let layer3: String
-    let sidebar: String
-    let border: String
-    let accent: String
-    var labelPrimary: String? = nil
-    var labelSecondary: String? = nil
-    var labelTertiary: String? = nil
-    var accentSoft: String? = nil
+package struct ThemePaletteColors: Codable, Equatable {
+    package let base: String
+    package let layer1: String
+    package let layer2: String
+    package let layer3: String
+    package let sidebar: String
+    package let border: String
+    package let accent: String
+    package var labelPrimary: String? = nil
+    package var labelSecondary: String? = nil
+    package var labelTertiary: String? = nil
+    package var accentSoft: String? = nil
 
-    var hasValidColors: Bool {
+    package var hasValidColors: Bool {
         let required = [base, layer1, layer2, layer3, sidebar, border, accent]
         let optional = [labelPrimary, labelSecondary, labelTertiary, accentSoft].compactMap { $0 }
         return (required + optional).allSatisfy { normalizedHexColor($0) != nil }
     }
 }
 
-enum ThemeTypography: String, Codable {
+package enum ThemeTypography: String, Codable {
     case system
     case rounded
     case modern
     case elegant
 
-    var cssFamily: String {
+    package var cssFamily: String {
         switch self {
         case .system:
             return #"-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif"#
@@ -64,7 +64,7 @@ enum ThemeTypography: String, Codable {
 
 /// 完整皮肤不再只有颜色。这里描述背景氛围、控件几何和图标语言，
 /// Web 与 SwiftUI 两侧都消费同一份参数，避免各自写死主题 id。
-enum ThemeEffectKind: String, Codable, Equatable {
+package enum ThemeEffectKind: String, Codable, Equatable {
     case none
     case stars
     case paper
@@ -79,7 +79,7 @@ enum ThemeEffectKind: String, Codable, Equatable {
     case pixels
 }
 
-enum ThemeIconStyle: String, Codable, Equatable {
+package enum ThemeIconStyle: String, Codable, Equatable {
     case monochrome
     case hierarchical
     case playful
@@ -88,7 +88,7 @@ enum ThemeIconStyle: String, Codable, Equatable {
 
 /// 边框是一等主题参数，不再只靠圆角和强调色间接推断。
 /// Web 页面和原生弹窗会使用同一套框体语言。
-enum ThemeFrameStyle: String, Codable, Equatable {
+package enum ThemeFrameStyle: String, Codable, Equatable {
     case soft
     case neon
     case stitched
@@ -99,28 +99,28 @@ enum ThemeFrameStyle: String, Codable, Equatable {
     case pixel
 }
 
-struct ThemeFrameEffects: Codable, Equatable {
-    let style: ThemeFrameStyle
-    let width: Double
-    let glow: Double
+package struct ThemeFrameEffects: Codable, Equatable {
+    package let style: ThemeFrameStyle
+    package let width: Double
+    package let glow: Double
 
-    static let standard = ThemeFrameEffects(style: .soft, width: 1, glow: 0)
+    package static let standard = ThemeFrameEffects(style: .soft, width: 1, glow: 0)
 
-    var hasValidValues: Bool {
+    package var hasValidValues: Bool {
         (0.5...3).contains(width) && (0...1).contains(glow)
     }
 }
 
-struct ThemeEffects: Codable, Equatable {
-    let kind: ThemeEffectKind
-    let iconStyle: ThemeIconStyle
-    let motion: Double
-    let cornerRadius: Double
-    let glassBlur: Double
-    let iconGlow: Double
-    var frame: ThemeFrameEffects? = nil
+package struct ThemeEffects: Codable, Equatable {
+    package let kind: ThemeEffectKind
+    package let iconStyle: ThemeIconStyle
+    package let motion: Double
+    package let cornerRadius: Double
+    package let glassBlur: Double
+    package let iconGlow: Double
+    package var frame: ThemeFrameEffects? = nil
 
-    static let standard = ThemeEffects(
+    package static let standard = ThemeEffects(
         kind: .none,
         iconStyle: .hierarchical,
         motion: 0,
@@ -129,7 +129,7 @@ struct ThemeEffects: Codable, Equatable {
         iconGlow: 0
     )
 
-    var hasValidValues: Bool {
+    package var hasValidValues: Bool {
         (0...1).contains(motion)
             && (6...24).contains(cornerRadius)
             && (0...28).contains(glassBlur)
@@ -137,33 +137,33 @@ struct ThemeEffects: Codable, Equatable {
             && (frame?.hasValidValues ?? true)
     }
 
-    var resolvedFrame: ThemeFrameEffects {
+    package var resolvedFrame: ThemeFrameEffects {
         frame ?? .standard
     }
 }
 
-struct ThemePresetWallpaper: Codable, Equatable {
-    let filename: String
-    let mode: WallpaperDisplayMode
-    let blur: Double
-    let dimming: Double
-    let surfaceOpacity: Double
+package struct ThemePresetWallpaper: Codable, Equatable {
+    package let filename: String
+    package let mode: WallpaperDisplayMode
+    package let blur: Double
+    package let dimming: Double
+    package let surfaceOpacity: Double
 }
 
-struct ThemePresetDefinition: Identifiable, Equatable {
-    let id: String
-    let name: String
-    let category: String
-    let detail: String
-    let order: Int
-    let light: ThemePaletteColors
-    let dark: ThemePaletteColors
-    let typography: ThemeTypography
-    let effects: ThemeEffects
-    let wallpaper: ThemePresetWallpaper?
-    let packageDirectory: String?
+package struct ThemePresetDefinition: Identifiable, Equatable {
+    package let id: String
+    package let name: String
+    package let category: String
+    package let detail: String
+    package let order: Int
+    package let light: ThemePaletteColors
+    package let dark: ThemePaletteColors
+    package let typography: ThemeTypography
+    package let effects: ThemeEffects
+    package let wallpaper: ThemePresetWallpaper?
+    package let packageDirectory: String?
 
-    init(
+    package init(
         id: String,
         name: String,
         category: String = "基础",
@@ -191,23 +191,23 @@ struct ThemePresetDefinition: Identifiable, Equatable {
 }
 
 private struct ThemePackageManifest: Codable {
-    let schemaVersion: Int
-    let id: String
-    let name: String
-    let category: String
-    let detail: String
-    let order: Int
-    let typography: ThemeTypography
-    let light: ThemePaletteColors
-    let dark: ThemePaletteColors
-    let effects: ThemeEffects?
-    let wallpaper: ThemePresetWallpaper
+    package let schemaVersion: Int
+    package let id: String
+    package let name: String
+    package let category: String
+    package let detail: String
+    package let order: Int
+    package let typography: ThemeTypography
+    package let light: ThemePaletteColors
+    package let dark: ThemePaletteColors
+    package let effects: ThemeEffects?
+    package let wallpaper: ThemePresetWallpaper
 }
 
 /// 内置主题注册表。配置只保存字符串 id，未来可以从主题包或导入文件追加定义，
 /// 不需要迁移用户已经保存的 ThemeConfiguration。
-enum ThemePresetCatalog {
-    static let native = ThemePresetDefinition(
+package enum ThemePresetCatalog {
+    package static let native = ThemePresetDefinition(
         id: "native",
         name: "DSH 原生",
         detail: "保留 DSH 当前浅色或深色配色",
@@ -221,7 +221,7 @@ enum ThemePresetCatalog {
         )
     )
 
-    static let palettePresets: [ThemePresetDefinition] = [
+    package static let palettePresets: [ThemePresetDefinition] = [
         native,
         ThemePresetDefinition(
             id: "pine-mist",
@@ -265,16 +265,16 @@ enum ThemePresetCatalog {
     ]
 
     /// 每套完整皮肤都来自 `Resources/Themes/<id>/theme.json`，资源和配置彼此隔离。
-    static let bundledPresets: [ThemePresetDefinition] = loadBundledPresets(
+    package static let bundledPresets: [ThemePresetDefinition] = loadBundledPresets(
         from: ThemeAssetRepository.bundledDirectoryURL
     )
-    static let builtIns: [ThemePresetDefinition] = palettePresets + bundledPresets
+    package static let builtIns: [ThemePresetDefinition] = palettePresets + bundledPresets
 
-    static func preset(id: String) -> ThemePresetDefinition {
+    package static func preset(id: String) -> ThemePresetDefinition {
         builtIns.first { $0.id == id } ?? native
     }
 
-    static func bundledWallpaperURL(for preset: ThemePresetDefinition) -> URL? {
+    package static func bundledWallpaperURL(for preset: ThemePresetDefinition) -> URL? {
         guard let directory = preset.packageDirectory,
               let wallpaper = preset.wallpaper else { return nil }
         return ThemeAssetRepository.bundledURL(
@@ -283,7 +283,7 @@ enum ThemePresetCatalog {
         )
     }
 
-    static func loadBundledPresets(from root: URL?) -> [ThemePresetDefinition] {
+    package static func loadBundledPresets(from root: URL?) -> [ThemePresetDefinition] {
         guard let root,
               let directories = try? FileManager.default.contentsOfDirectory(
                 at: root,
@@ -344,24 +344,24 @@ enum ThemePresetCatalog {
     }
 }
 
-enum ThemeWallpaperSource: String, Codable {
+package enum ThemeWallpaperSource: String, Codable {
     case preset
     case custom
 }
 
-struct ThemeConfiguration: Codable, Equatable {
-    var isEnabled = true
-    var presetID = ThemePresetCatalog.native.id
-    var usesCustomAccent = false
-    var customAccentHex = "#4F7DF3"
-    var wallpaperEnabled = false
-    var wallpaperFilename: String?
+package struct ThemeConfiguration: Codable, Equatable {
+    package var isEnabled = true
+    package var presetID = ThemePresetCatalog.native.id
+    package var usesCustomAccent = false
+    package var customAccentHex = "#4F7DF3"
+    package var wallpaperEnabled = false
+    package var wallpaperFilename: String?
     /// 可选是为了兼容 build 4/5 保存的 schema v1；nil 会按是否存在自选文件自动迁移。
-    var wallpaperSource: ThemeWallpaperSource? = nil
-    var wallpaperDisplayMode: WallpaperDisplayMode = .fill
-    var wallpaperBlur: Double = 0
-    var wallpaperDimming: Double = 0.34
-    var surfaceOpacity: Double = 0.88
+    package var wallpaperSource: ThemeWallpaperSource? = nil
+    package var wallpaperDisplayMode: WallpaperDisplayMode = .fill
+    package var wallpaperBlur: Double = 0
+    package var wallpaperDimming: Double = 0.34
+    package var surfaceOpacity: Double = 0.88
 
     mutating func normalize() {
         if !ThemePresetCatalog.builtIns.contains(where: { $0.id == presetID }) {
@@ -391,21 +391,21 @@ struct ThemeConfiguration: Codable, Equatable {
 }
 
 private struct ThemePersistenceEnvelope: Codable {
-    let schemaVersion: Int
-    let configuration: ThemeConfiguration
+    package let schemaVersion: Int
+    package let configuration: ThemeConfiguration
 }
 
-enum ThemeAssetRepository {
-    static let scheme = "dsh-desktop-theme"
-    static let host = "wallpaper"
-    static let bundledHost = "bundled"
+package enum ThemeAssetRepository {
+    package static let scheme = "dsh-desktop-theme"
+    package static let host = "wallpaper"
+    package static let bundledHost = "bundled"
 
-    static var bundledDirectoryURL: URL? {
+    package static var bundledDirectoryURL: URL? {
         Bundle.main.resourceURL?
             .appendingPathComponent("Themes", isDirectory: true)
     }
 
-    static var directoryURL: URL {
+    package static var directoryURL: URL {
         let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
         return root
@@ -413,7 +413,7 @@ enum ThemeAssetRepository {
             .appendingPathComponent("Themes", isDirectory: true)
     }
 
-    static func prepareDirectory() throws {
+    package static func prepareDirectory() throws {
         try FileManager.default.createDirectory(
             at: directoryURL,
             withIntermediateDirectories: true,
@@ -431,7 +431,7 @@ enum ThemeAssetRepository {
         )
     }
 
-    static func isSafeComponent(_ value: String) -> Bool {
+    package static func isSafeComponent(_ value: String) -> Bool {
         guard !value.isEmpty,
               value != ".", value != "..",
               value == URL(fileURLWithPath: value).lastPathComponent,
@@ -441,7 +441,7 @@ enum ThemeAssetRepository {
         }
     }
 
-    static func url(for filename: String?) -> URL? {
+    package static func url(for filename: String?) -> URL? {
         guard let filename,
               isSafeComponent(filename) else { return nil }
         guard let rootValues = try? directoryURL.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
@@ -458,13 +458,13 @@ enum ThemeAssetRepository {
         return resolved
     }
 
-    static func webURL(for filename: String?) -> URL? {
+    package static func webURL(for filename: String?) -> URL? {
         guard let filename, url(for: filename) != nil,
               let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else { return nil }
         return URL(string: "\(scheme)://\(host)/\(encoded)")
     }
 
-    static func bundledURL(
+    package static func bundledURL(
         packageDirectory: String,
         filename: String,
         rootURL: URL? = bundledDirectoryURL
@@ -485,7 +485,7 @@ enum ThemeAssetRepository {
         return resolved
     }
 
-    static func bundledWebURL(for preset: ThemePresetDefinition) -> URL? {
+    package static func bundledWebURL(for preset: ThemePresetDefinition) -> URL? {
         guard let packageDirectory = preset.packageDirectory,
               let wallpaper = preset.wallpaper,
               bundledURL(packageDirectory: packageDirectory, filename: wallpaper.filename) != nil,
@@ -495,7 +495,7 @@ enum ThemeAssetRepository {
         return URL(string: "\(scheme)://\(bundledHost)/\(encodedPackage)/\(encodedFilename)")
     }
 
-    static func fileURL(for requestURL: URL) -> URL? {
+    package static func fileURL(for requestURL: URL) -> URL? {
         guard requestURL.scheme == scheme else { return nil }
         if requestURL.host == host {
             let encodedName = requestURL.lastPathComponent
@@ -515,7 +515,7 @@ enum ThemeAssetRepository {
 private enum ThemeStoreError: LocalizedError {
     case message(String)
 
-    var errorDescription: String? {
+    package var errorDescription: String? {
         switch self {
         case .message(let value): return value
         }
@@ -524,14 +524,13 @@ private enum ThemeStoreError: LocalizedError {
 
 // MARK: - 主题状态与壁纸资产
 
-final class ThemeStore: ObservableObject {
-    static let shared = ThemeStore()
+package final class ThemeStore: ObservableObject {
 
-    @Published var configuration: ThemeConfiguration {
+    @Published package var configuration: ThemeConfiguration {
         didSet { persist() }
     }
-    @Published private(set) var statusMessage: String?
-    @Published private(set) var errorMessage: String?
+    @Published package private(set) var statusMessage: String?
+    @Published package private(set) var errorMessage: String?
 
     private static let defaultsKey = "themeConfigurationV1"
     private static let supportedWallpaperExtensions: Set<String> = [
@@ -539,7 +538,7 @@ final class ThemeStore: ObservableObject {
     ]
     private static let maximumWallpaperBytes: Int64 = 50 * 1024 * 1024
 
-    private init() {
+    package init() {
         var loaded = Self.loadConfiguration()
         if loaded.wallpaperFilename != nil,
            ThemeAssetRepository.url(for: loaded.wallpaperFilename) == nil {
@@ -549,44 +548,44 @@ final class ThemeStore: ObservableObject {
         configuration = loaded
     }
 
-    var selectedPreset: ThemePresetDefinition {
+    package var selectedPreset: ThemePresetDefinition {
         ThemePresetCatalog.preset(id: configuration.presetID)
     }
 
-    var resolvedWallpaperSource: ThemeWallpaperSource {
+    package var resolvedWallpaperSource: ThemeWallpaperSource {
         configuration.wallpaperSource ?? (configuration.wallpaperFilename == nil ? .preset : .custom)
     }
 
-    var customWallpaperURL: URL? {
+    package var customWallpaperURL: URL? {
         ThemeAssetRepository.url(for: configuration.wallpaperFilename)
     }
 
-    var presetWallpaperURL: URL? {
+    package var presetWallpaperURL: URL? {
         ThemePresetCatalog.bundledWallpaperURL(for: selectedPreset)
     }
 
-    var wallpaperURL: URL? {
+    package var wallpaperURL: URL? {
         switch resolvedWallpaperSource {
         case .preset: return presetWallpaperURL
         case .custom: return customWallpaperURL
         }
     }
 
-    var wallpaperWebURL: URL? {
+    package var wallpaperWebURL: URL? {
         switch resolvedWallpaperSource {
         case .preset: return ThemeAssetRepository.bundledWebURL(for: selectedPreset)
         case .custom: return ThemeAssetRepository.webURL(for: configuration.wallpaperFilename)
         }
     }
 
-    var wallpaperDisplayName: String? {
+    package var wallpaperDisplayName: String? {
         switch resolvedWallpaperSource {
         case .preset: return selectedPreset.wallpaper == nil ? nil : "\(selectedPreset.name) · 内置素材"
         case .custom: return customWallpaperURL?.lastPathComponent
         }
     }
 
-    func selectPreset(_ preset: ThemePresetDefinition) {
+    package func selectPreset(_ preset: ThemePresetDefinition) {
         statusMessage = nil
         errorMessage = nil
         var next = configuration
@@ -609,7 +608,7 @@ final class ThemeStore: ObservableObject {
             : "已应用“\(preset.name)”完整主题。"
     }
 
-    func importWallpaper(from sourceURL: URL) {
+    package func importWallpaper(from sourceURL: URL) {
         statusMessage = nil
         errorMessage = nil
         do {
@@ -662,7 +661,7 @@ final class ThemeStore: ObservableObject {
         }
     }
 
-    func removeWallpaper() {
+    package func removeWallpaper() {
         statusMessage = nil
         errorMessage = nil
         let previousFilename = configuration.wallpaperFilename
@@ -685,7 +684,7 @@ final class ThemeStore: ObservableObject {
             : "已移除自选壁纸，并恢复当前主题的内置素材。"
     }
 
-    func resetToDefaults() {
+    package func resetToDefaults() {
         statusMessage = nil
         errorMessage = nil
         let previousFilename = configuration.wallpaperFilename
@@ -694,7 +693,7 @@ final class ThemeStore: ObservableObject {
         statusMessage = "已恢复 DSH 原生外观。"
     }
 
-    func clearMessages() {
+    package func clearMessages() {
         statusMessage = nil
         errorMessage = nil
     }
@@ -724,14 +723,14 @@ final class ThemeStore: ObservableObject {
 
 // MARK: - 颜色工具
 
-func normalizedHexColor(_ value: String) -> String? {
+package func normalizedHexColor(_ value: String) -> String? {
     var raw = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
     if raw.hasPrefix("#") { raw.removeFirst() }
     guard raw.count == 6, raw.allSatisfy({ $0.isHexDigit }) else { return nil }
     return "#" + raw
 }
 
-func themeColorComponents(_ value: String) -> (red: Double, green: Double, blue: Double)? {
+package func themeColorComponents(_ value: String) -> (red: Double, green: Double, blue: Double)? {
     guard let normalized = normalizedHexColor(value) else { return nil }
     let raw = String(normalized.dropFirst())
     guard let number = UInt64(raw, radix: 16) else { return nil }
@@ -742,7 +741,7 @@ func themeColorComponents(_ value: String) -> (red: Double, green: Double, blue:
     )
 }
 
-func themeNSColor(_ value: String) -> NSColor {
+package func themeNSColor(_ value: String) -> NSColor {
     guard let components = themeColorComponents(value) else { return .controlAccentColor }
     return NSColor(
         srgbRed: components.red,
@@ -752,7 +751,7 @@ func themeNSColor(_ value: String) -> NSColor {
     )
 }
 
-func themeHexColor(_ color: NSColor) -> String? {
+package func themeHexColor(_ color: NSColor) -> String? {
     guard let rgb = color.usingColorSpace(.sRGB) else { return nil }
     let red = Int(round(min(1, max(0, rgb.redComponent)) * 255))
     let green = Int(round(min(1, max(0, rgb.greenComponent)) * 255))

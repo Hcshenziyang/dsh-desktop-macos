@@ -3,24 +3,24 @@ import Foundation
 
 // MARK: - Web 主题快照
 
-struct ThemeWebWallpaper: Codable, Equatable {
-    let url: String
-    let mode: WallpaperDisplayMode
-    let blur: Double
-    let dimming: Double
+package struct ThemeWebWallpaper: Codable, Equatable {
+    package let url: String
+    package let mode: WallpaperDisplayMode
+    package let blur: Double
+    package let dimming: Double
 }
 
-struct ThemeWebSnapshot: Codable, Equatable {
-    let enabled: Bool
-    let lightTokens: [String: String]
-    let darkTokens: [String: String]
-    let effects: ThemeEffects
-    let wallpaper: ThemeWebWallpaper?
+package struct ThemeWebSnapshot: Codable, Equatable {
+    package let enabled: Bool
+    package let lightTokens: [String: String]
+    package let darkTokens: [String: String]
+    package let effects: ThemeEffects
+    package let wallpaper: ThemeWebWallpaper?
 }
 
 extension ThemeStore {
     /// SwiftUI 和文件存储细节在这里收敛成 WebView 唯一需要理解的不可变输入。
-    var webSnapshot: ThemeWebSnapshot {
+    package var webSnapshot: ThemeWebSnapshot {
         let config = configuration
         let preset = ThemePresetCatalog.preset(id: config.presetID)
         let wallpaperURL = config.wallpaperEnabled ? wallpaperWebURL : nil
@@ -220,7 +220,7 @@ private func themeSnapshotJSON(_ snapshot: ThemeWebSnapshot) -> String {
     return json
 }
 
-func themeEnhancementScript(snapshot: ThemeWebSnapshot) -> String {
+package func themeEnhancementScript(snapshot: ThemeWebSnapshot) -> String {
     let snapshotJSON = themeSnapshotJSON(snapshot)
     let componentStyles = themeWebComponentStyles()
     let frameStyles = themeWebFrameStyles()
@@ -638,7 +638,7 @@ func themeEnhancementScript(snapshot: ThemeWebSnapshot) -> String {
     """#
 }
 
-func themePreferenceScript(snapshot: ThemeWebSnapshot) -> String {
+package func themePreferenceScript(snapshot: ThemeWebSnapshot) -> String {
     "window.__dshDesktopTheme?.configure(\(themeSnapshotJSON(snapshot)));"
 }
 
@@ -647,14 +647,15 @@ func themePreferenceScript(snapshot: ThemeWebSnapshot) -> String {
 /// 只允许 WKWebView 读取应用自己复制到 Application Support/Themes 的图片。
 /// 页面永远看不到用户原始图片路径，DSH HTTP 服务也不会获得文件访问能力。
 private final class ThemeSchemeTaskBox: @unchecked Sendable {
-    let task: WKURLSchemeTask
+    package let task: WKURLSchemeTask
 
-    init(_ task: WKURLSchemeTask) {
+    package init(_ task: WKURLSchemeTask) {
         self.task = task
     }
 }
 
-final class ThemeAssetSchemeHandler: NSObject, WKURLSchemeHandler {
+package final class ThemeAssetSchemeHandler: NSObject, WKURLSchemeHandler {
+    package override init() { super.init() }
     private let readQueue = DispatchQueue(
         label: "io.github.dramtea.dsh-desktop-community.theme-assets",
         qos: .userInitiated,
@@ -663,7 +664,7 @@ final class ThemeAssetSchemeHandler: NSObject, WKURLSchemeHandler {
     private let lock = NSLock()
     private var activeTasks: Set<ObjectIdentifier> = []
 
-    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+    package func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         let taskBox = ThemeSchemeTaskBox(urlSchemeTask)
         let identifier = ObjectIdentifier(urlSchemeTask as AnyObject)
         lock.lock()
@@ -711,7 +712,7 @@ final class ThemeAssetSchemeHandler: NSObject, WKURLSchemeHandler {
         }
     }
 
-    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+    package func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
         let identifier = ObjectIdentifier(urlSchemeTask as AnyObject)
         lock.lock()
         activeTasks.remove(identifier)
