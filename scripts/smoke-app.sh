@@ -32,11 +32,17 @@ with tempfile.TemporaryDirectory(prefix='dsh-app-smoke-') as temporary:
     with socket.socket() as reservation:
         reservation.bind(('127.0.0.1', 0))
         port = reservation.getsockname()[1]
-        arguments = [str(app / 'Contents/MacOS/DSHLauncher'),
-            '-autoStart', 'NO', '-stopOnQuit', 'NO', '-cleanupStaleOnStart', 'NO',
-            '-dshPath', str(root / 'no-runtime-for-smoke-test'), '-host', '127.0.0.1', '-port', str(port),
-            '-localModelStartExecutable', '', '-localModelStopExecutable', '',
-            '-localModelHealthURL', '', '-stopLocalModelOnQuit', 'NO']
+        # NSArgumentDomain stores command-line overrides as strings. Import
+        # typed values so the service's Bool/Int settings cannot fall back to
+        # auto-start or the user's normal port during this isolated check.
+        preferences = root / 'preferences.plist'
+        with preferences.open('wb') as handle:
+            plistlib.dump({'autoStart': False, 'stopOnQuit': False, 'cleanupStaleOnStart': False,
+                'dshPath': str(root / 'no-runtime-for-smoke-test'), 'host': '127.0.0.1', 'port': port,
+                'localModelStartExecutable': '', 'localModelStopExecutable': '',
+                'localModelHealthURL': '', 'stopLocalModelOnQuit': False}, handle)
+        subprocess.run(['/usr/bin/defaults', 'import', identifier, str(preferences)], check=True)
+        arguments = [str(app / 'Contents/MacOS/DSHLauncher')]
         environment = dict(os.environ, DSH_HOME=str(root / 'dsh'))
         log_path = root / 'launch.log'
         process = None

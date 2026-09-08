@@ -16,11 +16,15 @@ let package = Package(
         .target(name: "InspectorFeature", dependencies: ["DSHCore", "DSHUI"], path: "Sources/Features/Inspector"),
         .target(name: "PluginsFeature", dependencies: ["DSHCore", "DSHUI"], path: "Sources/Features/Plugins"),
         .target(name: "ThemesFeature", dependencies: ["DSHUI"], path: "Sources/Features/Themes"),
+        .target(name: "ProjectViewsFeature", dependencies: ["DSHCore"], path: "Sources/Features/ProjectViews"),
+        .target(name: "ProjectMemoryFeature", dependencies: ["DSHCore"], path: "Sources/Features/ProjectMemory"),
+        .target(name: "WorkspaceToolsFeature", dependencies: ["DSHCore"], path: "Sources/Features/WorkspaceTools"),
         .executableTarget(name: "DSHLauncher", dependencies: [
             "DSHCore", "DSHWeb", "DSHUI", "LocalModelFeature", "ArchiveFeature",
-            "InspectorFeature", "PluginsFeature", "ThemesFeature"
+            "InspectorFeature", "PluginsFeature", "ThemesFeature", "ProjectViewsFeature", "WorkspaceToolsFeature", "ProjectMemoryFeature"
         ], path: "Sources/App"),
         .testTarget(name: "DSHCoreTests", dependencies: ["DSHCore"], path: "Tests/Core"),
+        .testTarget(name: "ProjectViewsTests", dependencies: ["ProjectViewsFeature"], path: "Tests/ProjectViews", exclude: ["project-views.test.mjs"]),
         .testTarget(name: "PluginsFeatureTests", dependencies: ["PluginsFeature", "DSHCore"], path: "Tests/Plugins", exclude: ["plugin-inventory.test.mjs"]),
         .testTarget(name: "FeatureBoundaryTests", dependencies: [
             "DSHCore", "DSHUI", "LocalModelFeature", "ArchiveFeature", "InspectorFeature", "PluginsFeature"

@@ -1,8 +1,10 @@
 # DSH Desktop Community for macOS
 
-一个独立维护、专注 macOS 的 DSH 桌面客户端社区项目。应用使用 SwiftUI 与 WKWebView，
-负责发现、启动、停止和重启本机的 `dsh web` 服务，并在原生窗口中显示 DeepSeek Harness
-Web UI。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
+一个独立维护、专注 macOS 的 DSH 桌面客户端社区项目。在同一个项目中浏览资料、管理待办
+与便签、整理长期记忆，也可以随时打开对话，继续编码或让 AI 协助工作。
+
+应用使用 SwiftUI 与 WKWebView，负责管理本机的 `dsh web` 服务，在 DeepSeek Harness
+原有界面上增加项目视图与桌面功能。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
 
 > [!IMPORTANT]
 > 本项目是从 [frankfika/dsh-desktop-macos](https://github.com/frankfika/dsh-desktop-macos)
@@ -15,18 +17,30 @@ Web UI。首个公开版本为 [`v0.1.0`](CHANGELOG.md#010---2026-09-01)。
 
 ## 功能
 
-- 原生 SwiftUI + WebKit macOS 应用，不引入第三方 App 依赖
-- 同时支持 Apple Silicon 与 Intel Mac
-- 检测已有 `dsh web` 服务，或从应用中启动、停止和重启服务
-- 登录时启动、实时日志和常用运行控制
-- 检测 Homebrew、npm、nvm、WorkBuddy 及常见 DSH 安装位置
-- 缺少运行时时，可单独安装官方 npm 包 `@deepseek-ai/dsh`
-- 可配置的本地模型服务按钮，可启动和停止用户选择的程序或脚本
-- 原生归档管理，可查看、恢复、逐条删除或清空 DSH 已归档会话
-- 简化内嵌插件列表，默认聚焦用户安装和异常运行单元，官方组件保留在高级视图
-- 原生插件管理，支持版本检查、逐个更新、运行状态检查与完整环境备份恢复
-- 原生“固定输入与记忆”检查器，可查看最终系统提示、工具/Skill 目录和本地长期记忆
-- 数据驱动的完整皮肤模块，内置十一套原创主题并支持自定义强调色和本机静态壁纸
+- **项目双视图**：传统视图保留对话与编码；文件夹视图浏览资料，随时展开项目对话和历史。
+- **Markdown 阅读与编辑**：大面积阅读、独立编辑页、保存与返回；其他文件使用系统默认应用打开。
+- **待办与便签**：每个工作区独立管理，用户与 Agent 共用数据，对话自动带入当前摘要。
+- **定时任务**：单次、每天或每周执行，可加入待办提醒，也可触发 AI 并保留独立的结果对话。
+- **项目记忆**：查看和编辑简要记忆、长期记忆，支持分类、标签、搜索、归档与恢复。
+- **运行与本地模型管理**：发现、启动、停止和重启 DSH，支持登录时启动、日志与自定义模型服务脚本。
+- **插件与会话管理**：检查 DSH 插件状态和更新，备份恢复插件环境，管理已归档会话。
+- **主题与检查器**：十一套内置主题、自定义强调色和壁纸；按需检查实际系统提示、工具与 Skill 目录。
+- **原生 macOS 应用**：支持 Apple Silicon 与 Intel Mac，可发现已有 DSH 或协助安装官方运行时。
+
+## 从项目开始
+
+打开或创建一个项目后，根据当前要做的事选择入口：
+
+| 要做的事 | 入口 |
+| --- | --- |
+| 浏览项目文件和资料 | 项目顶部 → 文件夹 |
+| 阅读或编辑 Markdown | 文件夹中点击 `.md` / `.markdown` 文件 |
+| 管理事项、便签和定时任务 | 文件夹页 → 待办 / 便签 / 定时任务 |
+| 查看与整理项目记忆 | 项目顶部 → 记忆，两种视图均可使用 |
+| 与 AI 对话或查看历史 | 文件夹页右侧 → 对话 / 历史，或切换传统视图 |
+
+项目记忆需要启用 `dsh-native-memory`；其他项目工具随客户端提供。更新客户端后重新启动
+由客户端管理的 DSH 服务，即可加载新增功能。定时任务只在 DSH 运行时执行，不会唤醒 Mac。
 
 ## 系统要求
 
@@ -62,12 +76,93 @@ ARCHS="$(uname -m)" ./build.sh
 
 ## 版本与发布
 
-当前版本为 `v0.1.2`，应用内部版本为 `0.1.2 (12)`。项目使用语义化版本号；推送 `v*`
+最近发布版本为 `v0.1.2`，应用内部版本为 `0.1.2 (12)`。本页按 `main` 分支源码描述功能；
+项目双视图、Markdown 编辑、工作区工具与项目记忆编辑尚未发布新的版本包，可从源码构建体验。
+项目使用语义化版本号；推送 `v*`
 标签会触发 macOS 通用版构建，并在本仓库创建对应的 GitHub Release。各版本变化见
 [CHANGELOG.md](CHANGELOG.md)。
 
 当前仓库不提供指向上游发布包的自动安装脚本，避免本项目与上游二进制混淆。
 准备公开发布前请完成 [发布检查清单](PUBLISHING.md)。
+
+## 项目视图
+
+选中项目后，主内容区顶部可以切换“传统视图 / 文件夹”。传统视图保留原有对话、编码与
+工具界面；文件夹视图展示该项目的实际文件，支持逐层浏览、面包屑、当前目录搜索、图标 /
+列表排列、隐藏文件开关，以及 Finder 入口。Markdown 文件在完整主区域阅读，支持标题、
+列表、表格、引用、代码块和项目内图片；点击“编辑”进入独立编辑页，提供保存、返回阅读、
+返回文件夹，以及 ⌘S 保存。其他文件直接交给系统默认应用。右侧“对话 / 历史”展开同一项目的
+对话面板；窄窗口采用覆盖式抽屉，宽窗口并排展示文件与对话。
+
+两种视图共用原有项目和会话；项目选择、侧栏和历史列表继续由 DSH 管理。切换视图不会
+重新创建会话或卸载对话界面，未发送草稿保留。每个项目独立记住视图偏好，首次默认传统
+视图。返回文件夹视图时保留本次窗口中的目录位置，重新启动后从项目根目录开始。
+
+功能作为独立 `ProjectViewsFeature` 模块，在客户端启动 DSH 时通过临时 `--patch` 挂载。
+更新客户端后需重新启动由客户端管理的 DSH；外部实例需自行停止后再由客户端启动。普通
+浏览器仍显示原有界面。文件读取通过仅限本机同源主页面的 WebKit 通道完成，根目录来自
+现有 Workspace 索引，阻止上级路径及指向项目外的链接。DSH 若更改布局且无法识别，保留
+原始界面。当前只支持本机 DSH 和默认的 JSON Workspace 索引。
+
+Markdown 编辑仅支持不超过 2 MB 的 UTF-8 `.md` / `.markdown` 文件；保存比较原文件版本，
+文件被其他应用或 Agent 修改时拒绝覆盖。保存保持原有 UTF-8 BOM、换行格式及文件权限。
+未保存草稿按项目和文件暂存在本机 WebKit 存储中，返回文件夹或重开客户端后可恢复；草稿
+不会写入项目文件，需点击“保存”才能落到原文。清除客户端网站数据会清除这份草稿缓存。
+
+Markdown 使用随包提供的 markdown-it 排版，禁用原始 HTML，不执行文档脚本。项目内图片
+通过本机受限读取显示；远程图片提供手动打开入口。文档链接可打开同项目 Markdown 或系统
+默认应用，网页链接在默认浏览器打开。
+
+## 项目记忆
+
+项目顶部的“记忆”入口在传统视图和文件夹视图中均可使用，以大尺寸页面展示和编辑当前
+项目的记忆。“简要记忆”是记忆插件带入对话的少量背景；“长期记忆”支持分类、标签、
+搜索、编辑、归档与恢复，供 Agent 按需检索。原有“固定输入与记忆”检查器继续用于查看
+实际请求和全部项目的数据。
+
+`ProjectMemoryFeature` 负责本机认证传输，`Resources/ProjectMemory` 独立适配已启用的
+`dsh-native-memory` v1 storage-domain。读写直接使用插件打开的同一个域和串行写入队列，
+不会生成第二份记忆库，也不会从 Swift 改写 `dsh_memory.json`。仅首次读取时调用只读的
+`memory_profile` 初始化原插件；页面保存不调用模型，Agent 自己写记忆时仍走原有审批。
+数量和字数上限沿用当前插件配置。手动编辑标记为 `desktop-editor`，不伪造对话来源。
+
+项目范围由服务端 Workspace 注册表解析，沿用记忆插件按工作目录隔离的语义；同一目录
+对应的多个项目共享记忆，页面会提示。已有记录在写入队列内核对版本，冲突时保留草稿。
+项目的 Agent 正在运行或等待审批时，手动保存会暂缓，防止覆盖其待提交修改。草稿只保留
+在当前窗口中，返回项目和切换项目不会丢失；退出应用或重载页面前请保存。
+
+首次打开记忆需要该项目已打开过一次对话。插件未启用或格式不兼容时显示明确提示。
+可运行 `./scripts/test-memory-runtime.sh` 验证真实插件双向读写、提示词更新、项目隔离、
+冲突保护、归档恢复和重启持久化；测试使用独立 DSH_HOME 和本地模拟模型。
+
+## 工作区待办、便签与定时任务
+
+文件夹页提供同级的“待办 / 便签 / 定时任务”，可收起工具区以留出文件浏览空间。
+待办支持状态、截止日期和说明；便签支持正文与置顶；三类内容均可归档、恢复。
+同一工作区的所有对话共享这些内容，其他工作区互相隔离。
+
+Agent 的每次模型请求自动附带当前待办和便签摘要；需要全文时使用 `workspace_note_read`，
+通过 `workspace_tools_list` 和 `workspace_todo_*`、`workspace_note_*` 工具读取或修改。
+用户与 Agent 共用一份数据，更新检查条目版本，避免互相覆盖。编辑草稿不会被后台刷新替换；
+遇到冲突可核对列表、复制草稿，或用“放弃草稿并重载”重新编辑。DSH 原有 `todo_write` 仍是
+会话内部的执行计划，与这里的个人待办独立。
+
+定时任务支持单次、每天、每周，可选择加入待办的提醒或 AI 执行。AI 使用创建任务时对话的
+模型与 Agent 预设，新建独立对话，沿用 DSH 的操作确认机制。可暂停、恢复、运行一次、查看
+最近执行记录，并直接打开结果对话。编辑暂停任务不会自动启用它；手动运行不会改变下次时间。
+
+定时器只在由客户端启动的 DSH 服务运行时工作，不会唤醒休眠的 Mac。恢复服务后，错过的周期
+只补执行一次；中断的 AI 运行记为中断，避免自动重复操作。最多同时执行两个 AI 定时任务，
+提醒不占用这一额度。重复时间按创建时保存的时区计算。
+
+`WorkspaceToolsFeature` 仅负责本机通道，独立 DSH 扩展负责数据和执行。数据保存在
+`DSH_HOME/desktop/workspace-tools.json`（默认 `~/.dsh/desktop/workspace-tools.json`），不写入项目仓库。
+同一数据目录只允许一个服务写入；原子落盘、条目版本和运行记录用于处理并发及异常退出。
+这是项目的当前工作数据，长期记忆仍由既有记忆模块管理。
+
+执行 `scripts/test.sh` 检查模块边界及功能回归；可另运行 `scripts/test-workspace-runtime.sh`
+进行真实 DSH 联调。后者使用隔离数据与本地模拟模型，覆盖工具读写、上下文注入、版本冲突、
+认证和定时 AI 对话，不需要模型凭据。
 
 ## 本地模型服务
 
@@ -81,12 +176,12 @@ ARCHS="$(uname -m)" ./build.sh
 - 健康检查 URL：可选，例如 `http://127.0.0.1:8000/health`
 - 退出应用时是否停止本地模型
 
-例如，已有 `start.sh` / `stop.sh` 的 Qwen 服务可以配置为：
+例如，已有 `start.sh` / `stop.sh` 的本地模型服务可以配置为：
 
 ```text
-名称:       Qwen 27B
-启动程序:   ~/Qwen38-27B-DSH/start.sh
-停止程序:   ~/Qwen38-27B-DSH/stop.sh
+名称:       本地模型
+启动程序:   ~/LocalModels/start.sh
+停止程序:   ~/LocalModels/stop.sh
 健康检查:   http://127.0.0.1:8000/health
 ```
 
@@ -228,8 +323,9 @@ Prompt 或工具执行轨迹；客户端依据它的 `skill-catalog` 来源元�
 - 活跃及已归档 Facts、类型、标签、时间和来源会话序号
 - 所选模型请求是否实际注入了该工作区的 Profile
 
-记忆写入、编辑和遗忘仍通过 `memory_remember`、`memory_edit`、`memory_forget` 完成，并沿用
-插件的人工审批流程。若设置了 `DSH_HOME`，检查器会读取对应数据目录。
+Agent 的记忆写入、编辑和遗忘通过 `memory_remember`、`memory_edit`、`memory_forget` 完成，
+沿用插件的人工审批流程。用户也可在项目顶部的“记忆”页面直接编辑同一份数据。
+若设置了 `DSH_HOME`，检查器会读取对应数据目录。
 
 ## 项目结构
 
@@ -244,10 +340,16 @@ Sources/Features/Archive/    归档模型、磁盘操作、状态与界面
 Sources/Features/Inspector/  固定输入与记忆的读取、观察器和界面
 Sources/Features/Plugins/    DSH 插件管理、状态观察与 Web 增强
 Sources/Features/Themes/     主题设置界面
+Sources/Features/ProjectViews/ 项目视图、文件读取及本机桥接
+Sources/Features/WorkspaceTools/ 工作区工具启动与本机传输
+Sources/Features/ProjectMemory/ 项目记忆启动与本机传输
 Package.swift                构建、测试与编辑器共用的模块依赖图
 Tests/                       功能行为和模块边界回归测试
 Resources/RequestInspector/  请求观察模块资源
 Resources/PluginInventory/   插件状态观察模块资源
+Resources/ProjectViews/      文件夹视图、样式与 DSH 布局适配
+Resources/WorkspaceTools/    工作区工具界面、共享存储及定时执行
+Resources/ProjectMemory/     项目记忆界面、原插件存储适配
 Resources/Themes/            独立主题包与素材
 build.sh                     通用 macOS App 构建、资源组装和签名
 scripts/test.sh              依赖边界、Swift 与 Node 回归检查
@@ -259,6 +361,20 @@ script/build_and_run.sh       本地构建、启动和调试
 这些是客户端内部模块。当前没有动态加载或安装客户端插件的框架；`Plugins` 管理的是
 DSH 运行时插件。功能之间不直接依赖，由 `AppContainer` 组装，模块依赖在 `Package.swift`
 中显式声明。
+
+## 开发与验证
+
+| 检查 | 命令 | 范围 |
+| --- | --- | --- |
+| 模块与功能回归 | `./scripts/test.sh` | 模块依赖、Swift 测试、界面脚本与数据行为 |
+| 工作区工具联调 | `./scripts/test-workspace-runtime.sh` | 待办、便签、上下文共享与定时 AI 对话 |
+| 记忆插件联调 | `./scripts/test-memory-runtime.sh` | 项目隔离、双向读写、修改冲突与重启持久化 |
+| 应用构建 | `./build.sh` | Apple Silicon / Intel 通用应用与签名检查 |
+| 应用启动 | `./scripts/smoke-app.sh` | 构建后的应用在隔离环境中启动 |
+
+联调脚本需要本机已安装 DSH；记忆联调还需要 `dsh-native-memory`，可通过
+`DSH_MEMORY_MODULE` 指定其模块文件。联调使用临时数据目录与本地模拟模型，不调用付费模型。
+`docs/` 用于本地工作记录和验证结果，已加入 `.gitignore`；构建产物、缓存与用户数据不提交。
 
 ## 来源、许可与商标
 
@@ -287,3 +403,10 @@ MIT license are preserved. Beginning with `v0.1.0`, this project has its own nam
 versioning, roadmap, repository, and release process. DeepSeek Harness is installed
 separately; this repository does not distribute model weights or credentials. See
 [NOTICE.md](NOTICE.md) for attribution and trademark information.
+
+The `main` branch adds per-project conversation and folder views, a Markdown reader
+and editor, shared todos and notes, scheduled reminders or AI tasks, and an editor
+for the existing `dsh-native-memory` store. These additions are available from source
+and are not yet included in a new release package. Other file types open in their
+default macOS applications. Runtime plugins and client features remain separate;
+the client does not yet provide a dynamic client-plugin framework.

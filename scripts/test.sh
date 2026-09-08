@@ -27,3 +27,6 @@ swift test --disable-xctest "${DSH_SPM_FLAGS[@]}" --scratch-path "$PWD/.build/sw
     --sdk "${DSH_SDK_CANDIDATES[0]}" ${DSH_SWIFT_FLAGS[@]+"${DSH_SWIFT_FLAGS[@]}"} \
     ${DSH_TEST_FLAGS[@]+"${DSH_TEST_FLAGS[@]}"} "$@"
 node Tests/Plugins/plugin-inventory.test.mjs
+node Tests/ProjectViews/project-views.test.mjs
+node --test Tests/WorkspaceTools/workspace-tools.test.mjs
+node Tests/ProjectMemory/project-memory.test.mjs

@@ -1,0 +1,299 @@
+.dpv-project-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.dpm-trigger {
+  border: 1px solid var(--dsw-alias-border-l1, #d8dadf);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  padding: 6px 13px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dpm-trigger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.dpm-dialog {
+  --dpm-bg: var(--dsw-alias-bg-layer-1, #fff);
+  --dpm-fg: var(--dsw-alias-label-primary, #242733);
+  --dpm-line: color-mix(in srgb, currentColor 14%, transparent);
+  background: var(--dpm-bg);
+  color: var(--dpm-fg);
+  width: min(960px, calc(100vw - 56px));
+  height: min(780px, calc(100vh - 56px));
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--dpm-line);
+  border-radius: 18px;
+  box-shadow: 0 24px 80px #0004;
+  font:
+    14px/1.6 -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  overflow: hidden;
+}
+.dpm-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.dpm-dialog::backdrop {
+  background: #16192566;
+  backdrop-filter: blur(4px);
+}
+.dpm-dialog * {
+  box-sizing: border-box;
+}
+.dpm-dialog h2,
+.dpm-dialog h3,
+.dpm-dialog p {
+  margin: 0;
+}
+.dpm-dialog button,
+.dpm-dialog input,
+.dpm-dialog select,
+.dpm-dialog textarea {
+  font: inherit;
+  color: inherit;
+}
+.dpm-dialog button {
+  border: 1px solid var(--dpm-line);
+  background: transparent;
+  border-radius: 8px;
+  padding: 6px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dpm-dialog button:hover {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.dpm-dialog button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.dpm-dialog :focus-visible,
+.dpm-trigger:focus-visible {
+  outline: 2px solid #6680d3;
+  outline-offset: 3px;
+}
+.dpm-dialog .dpm-primary {
+  background: #596eae;
+  color: white;
+  border-color: transparent;
+}
+.dpm-dialog .dpm-primary:hover {
+  background: #4a609f;
+}
+.dpm-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 23px 30px 17px;
+}
+.dpm-head h2 {
+  font-size: 21px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+}
+.dpm-head p {
+  font-size: 12px;
+  opacity: 0.65;
+  margin-top: 3px;
+}
+.dpm-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 30px 16px;
+  border-bottom: 1px solid var(--dpm-line);
+}
+.dpm-tabs button {
+  border: 0;
+  opacity: 0.65;
+}
+.dpm-tabs button[aria-pressed="true"] {
+  background: color-mix(in srgb, #6680d3 14%, transparent);
+  color: #657bc0;
+  opacity: 1;
+}
+.dpm-status {
+  padding: 10px 30px;
+  background: color-mix(in srgb, #b79c52 12%, transparent);
+  font-size: 12px;
+  flex: none;
+}
+.dpm-status[hidden] {
+  display: none;
+}
+.dpm-main {
+  padding: 22px 30px 32px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+.dpm-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.dpm-info p {
+  width: 100%;
+  opacity: 0.65;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.dpm-count {
+  font-size: 12px;
+  opacity: 0.6;
+  margin-right: auto;
+}
+.dpm-card {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--dpm-line);
+}
+.dpm-content {
+  min-width: 0;
+  flex: 1;
+}
+.dpm-dialog .dpm-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 6px;
+  line-height: 1.8;
+}
+.dpm-eyebrow {
+  font-size: 11px;
+  font-weight: 650;
+  color: #7c8bbb;
+}
+.dpm-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  opacity: 0.85;
+}
+.dpm-card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+}
+.dpm-dialog .dpm-tags {
+  font-size: 12px;
+  color: #7c8bbb;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+.dpm-source {
+  display: block;
+  font-size: 11px;
+  opacity: 0.55;
+  margin-top: 8px;
+}
+.dpm-empty {
+  padding: 65px 20px;
+  text-align: center;
+  opacity: 0.6;
+}
+.dpm-filters {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 8px;
+}
+.dpm-filters label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  opacity: 0.7;
+}
+.dpm-dialog input[type="search"],
+.dpm-editor input,
+.dpm-editor select,
+.dpm-editor textarea {
+  background: color-mix(in srgb, currentColor 3%, transparent);
+  border: 1px solid var(--dpm-line);
+  border-radius: 9px;
+  padding: 10px 12px;
+  width: 100%;
+  outline-offset: 2px;
+}
+.dpm-editor-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.dpm-editor-title h3 {
+  font-size: 16px;
+}
+.dpm-editor-title button {
+  font-size: 12px;
+  opacity: 0.75;
+}
+.dpm-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.dpm-editor textarea {
+  min-height: 210px;
+  resize: vertical;
+  line-height: 1.8;
+  font-size: 15px;
+}
+.dpm-fields {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 18px;
+  margin-top: 22px;
+}
+.dpm-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+.dpm-editor-actions small {
+  margin: 0;
+}
+.dpm-dialog .dpm-danger {
+  color: #b06b65;
+  margin-left: auto;
+}
+
+@media (max-width: 700px) {
+  .dpm-head,
+  .dpm-main {
+    padding: 18px;
+  }
+  .dpm-tabs {
+    padding: 0 18px 12px;
+  }
+  .dpm-card {
+    gap: 12px;
+  }
+  .dpm-card-actions {
+    flex-direction: column;
+  }
+  .dpm-fields {
+    grid-template-columns: 1fr;
+  }
+  .dpm-filters {
+    flex-wrap: wrap;
+  }
+}

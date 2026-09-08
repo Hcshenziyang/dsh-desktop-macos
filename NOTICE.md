@@ -25,6 +25,15 @@ directory contains a `CREDITS.md` file recording its generation prompt. To the e
 rights exist in these generated assets, they are distributed with this repository under the
 MIT License. No third-party stock wallpaper, public-figure likeness, or extracted franchise asset is bundled.
 
+## Bundled Markdown renderer
+
+`Resources/ProjectViews/vendor/markdown-it.min.js` is markdown-it 15.0.1,
+obtained from the official npm package. It is distributed under the MIT License.
+Project: <https://github.com/markdown-it/markdown-it>. Complete copyright and
+license notices for markdown-it and its packaged dependencies are preserved in
+[Resources/ProjectViews/vendor/LICENSES.txt](Resources/ProjectViews/vendor/LICENSES.txt).
+The renderer runs locally with raw HTML disabled; there is no runtime CDN dependency.
+
 ## Project lineage and scope
 
 Beginning with `v0.1.0`, DSH Desktop Community has its own project name, semantic

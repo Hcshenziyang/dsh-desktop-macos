@@ -1,0 +1,229 @@
+.dwt-root {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 12px;
+  font:
+    12px -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  overflow: auto;
+  overflow-x: hidden;
+}
+.dwt-root * {
+  box-sizing: border-box;
+}
+.dwt-root [hidden],
+.dwt-root[hidden] {
+  display: none !important;
+}
+.dwt-root button {
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  white-space: nowrap;
+}
+.dwt-root button:hover {
+  background: var(--dsw-alias-bg-layer-2);
+}
+.dwt-root button:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.dwt-top {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  background: var(--dsw-alias-bg-layer-1);
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  z-index: 1;
+}
+.dwt-tabs {
+  display: flex;
+  flex: 1;
+  gap: 5px;
+}
+.dwt-tabs button[aria-selected="true"] {
+  background: var(--dsw-alias-bg-base);
+  border-color: var(--dsw-alias-border-l1);
+  font-weight: 600;
+}
+.dwt-feedback {
+  padding: 8px 14px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1.55;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+.dwt-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 12px;
+}
+.dwt-actions label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dwt-main {
+  display: flex;
+  align-items: flex-start;
+  padding: 0 10px 10px;
+  gap: 12px;
+}
+.dwt-items {
+  flex: 1;
+  min-width: 100px;
+}
+.dwt-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  padding: 6px 2px;
+}
+.dwt-item:last-child {
+  border: 0;
+}
+.dwt-root .dwt-item-body {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: normal;
+  padding: 5px;
+}
+.dwt-item-body strong {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.dwt-item-body span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1.5;
+  margin-top: 4px;
+}
+.dwt-done {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+.dwt-subtle {
+  color: var(--dsw-alias-label-tertiary) !important;
+  font-size: 11px !important;
+}
+.dwt-empty,
+.dwt-hint {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
+  line-height: 1.7;
+  padding: 7px;
+  margin: 0;
+}
+.dwt-editor {
+  width: 48%;
+  flex-shrink: 0;
+  padding: 9px 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-base);
+}
+.dwt-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+.dwt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+.dwt-field > span {
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary);
+}
+.dwt-field input,
+.dwt-field textarea,
+.dwt-field select {
+  min-width: 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 6px;
+  padding: 7px;
+}
+.dwt-field input[type="checkbox"] {
+  width: auto;
+  align-self: flex-start;
+}
+.dwt-field textarea {
+  min-height: 90px;
+  resize: vertical;
+  line-height: 1.6;
+}
+.dwt-root .dwt-primary {
+  background: var(--dsw-alias-brand-primary);
+  color: var(--dsw-alias-label-primary-foreground, #fff);
+  width: 100%;
+  margin-top: 7px;
+}
+.dwt-root input[type="checkbox"] {
+  accent-color: var(--dsw-alias-brand-primary);
+}
+.dwt-root input:focus-visible,
+.dwt-root textarea:focus-visible,
+.dwt-root select:focus-visible,
+.dwt-root button:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+.dwt-run {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 5px;
+  border-top: 1px solid var(--dsw-alias-border-l1);
+}
+.dwt-run strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.dwt-run span {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 10px;
+}
+.dwt-error {
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+@container (max-width:600px) {
+  .dwt-main {
+    flex-direction: column;
+  }
+  .dwt-editor {
+    width: 100%;
+  }
+}
+.dpv-workspace-tools {
+  container-type: inline-size;
+}

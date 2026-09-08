@@ -1,0 +1,256 @@
+/* Document layout is independent of the folder tools and chat drawer. */
+.dpv-panel[data-document] > :not(.dpv-document) {
+  display: none !important;
+}
+.dpv-document {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--pv-bg);
+}
+.dpv-document-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--pv-line);
+  flex-shrink: 0;
+}
+.dpv-document-header > button {
+  flex-shrink: 0;
+}
+.dpv-document-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.dpv-document-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.dpv-document .dpv-document-primary {
+  background: var(--pv-accent);
+  color: var(--dsw-alias-label-primary-foreground, #fff);
+  padding-inline: 18px;
+}
+.dpv-document-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 24px;
+  color: var(--pv-muted);
+  background: var(--pv-panel);
+  font-size: 12px;
+  line-height: 1.6;
+  flex-shrink: 0;
+}
+.dpv-document-status button {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.dpv-document-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.dpv-markdown {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 36px 40px 80px;
+  color: var(--pv-text);
+  font:
+    15px/1.85 -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+  overflow-wrap: anywhere;
+}
+.dpv-markdown > :first-child {
+  margin-top: 0;
+}
+.dpv-markdown h1,
+.dpv-markdown h2,
+.dpv-markdown h3,
+.dpv-markdown h4,
+.dpv-markdown h5,
+.dpv-markdown h6 {
+  line-height: 1.4;
+  font-weight: 650;
+  margin: 1.6em 0 0.7em;
+  scroll-margin-top: 24px;
+}
+.dpv-markdown h1 {
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+.dpv-markdown h2 {
+  font-size: 23px;
+  border-bottom: 1px solid var(--pv-line);
+  padding-bottom: 10px;
+}
+.dpv-markdown h3 {
+  font-size: 19px;
+}
+.dpv-markdown h4 {
+  font-size: 16px;
+}
+.dpv-markdown p {
+  margin: 0 0 1em;
+}
+.dpv-markdown ul,
+.dpv-markdown ol {
+  padding-left: 1.6em;
+  margin: 0.5em 0 1.2em;
+}
+.dpv-markdown ul {
+  list-style: disc;
+}
+.dpv-markdown ol {
+  list-style: decimal;
+}
+.dpv-markdown li {
+  display: list-item;
+  margin: 0.3em 0;
+}
+.dpv-markdown li p {
+  margin: 0.4em 0;
+}
+.dpv-markdown blockquote {
+  border-left: 3px solid var(--pv-accent);
+  margin: 1.3em 0;
+  padding: 10px 18px;
+  color: var(--pv-muted);
+  background: var(--pv-panel);
+  border-radius: 0 8px 8px 0;
+}
+.dpv-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+.dpv-markdown a {
+  color: var(--pv-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.dpv-markdown code {
+  font:
+    0.88em/1.7 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  background: var(--pv-panel);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+.dpv-markdown pre {
+  display: block;
+  overflow-x: auto;
+  margin: 1.3em 0;
+  padding: 18px 20px;
+  border: 1px solid var(--pv-line);
+  border-radius: 10px;
+  background: var(--pv-panel);
+  white-space: pre;
+  overflow-wrap: normal;
+}
+.dpv-markdown pre code {
+  padding: 0;
+  background: transparent;
+  white-space: pre;
+}
+.dpv-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 1.3em 0;
+  font-size: 14px;
+}
+.dpv-markdown th,
+.dpv-markdown td {
+  padding: 9px 14px;
+  border: 1px solid var(--pv-line);
+  text-align: left;
+  min-width: 80px;
+}
+.dpv-markdown th {
+  font-weight: 600;
+  background: var(--pv-panel);
+}
+.dpv-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--pv-line);
+  margin: 2em 0;
+}
+.dpv-md-image {
+  display: block;
+  color: var(--pv-muted);
+  font-size: 12px;
+}
+.dpv-md-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 18px auto;
+  border-radius: 8px;
+}
+.dpv-document[data-mode="edit"] .dpv-document-body {
+  overflow: hidden;
+  padding: 20px 24px;
+}
+.dpv-markdown-editor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  padding: 22px 26px;
+  border: 1px solid var(--pv-line);
+  border-radius: 10px;
+  outline: none;
+  background: var(--pv-bg);
+  color: var(--pv-text);
+  font:
+    14px/1.85 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  tab-size: 4;
+}
+.dpv-markdown-editor:focus {
+  border-color: var(--pv-accent);
+}
+.dpv-document-error,
+.dpv-document-empty {
+  color: var(--pv-muted);
+  padding-top: 25px;
+}
+@media (max-width: 1100px) {
+  .dpv-document-header {
+    padding: 12px 14px;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .dpv-document-actions {
+    margin-left: auto;
+  }
+  .dpv-markdown {
+    padding: 28px 24px 60px;
+  }
+  .dpv-document[data-mode="edit"] .dpv-document-body {
+    padding: 12px;
+  }
+  .dpv-document-status {
+    padding-inline: 14px;
+  }
+  .dpv-markdown-editor {
+    padding: 16px;
+  }
+}

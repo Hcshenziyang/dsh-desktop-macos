@@ -584,7 +584,7 @@ private struct MemoryWorkspaceDetailView: View {
                     ForEach(visibleFacts) { fact in memoryFactCard(fact) }
                 }
 
-                Label("此页面只读。记忆修改和遗忘仍应通过 memory_remember / memory_edit / memory_forget，并保留人工审批。", systemImage: "hand.raised")
+                Label("此处用于检查全部记忆。查看和修改当前项目的记忆，请使用项目顶部的“记忆”入口；Agent 的记忆写入仍遵循原有审批。", systemImage: "hand.raised")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.vertical, 4)

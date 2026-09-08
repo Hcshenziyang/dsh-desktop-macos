@@ -41,7 +41,14 @@ struct ContentView: View {
                 if mgr.state.webReady { // if else 只显示一个界面，检查mgr状态，可访问/不可访问
                     WebView(url: mgr.url,
                             enhancements: container.webEnhancements(theme: themeStore.webSnapshot),
-                            resourceHandlers: [WebResourceHandler(scheme: ThemeAssetRepository.scheme, handler: ThemeAssetSchemeHandler())])
+                            resourceHandlers: [WebResourceHandler(scheme: ThemeAssetRepository.scheme, handler: ThemeAssetSchemeHandler())],
+                            messageHandlers: [WebMessageHandler(name: "dshProjectFiles", handle: container.projectViews.handle),
+                                              WebMessageHandler(name: "dshProjectMemory", handle: { body, reply in
+                                                  container.projectMemory.handle(body, baseURL: mgr.url, reply: reply)
+                                              }),
+                                              WebMessageHandler(name: "dshWorkspaceTools", handle: { body, reply in
+                                                  container.workspaceTools.handle(body, baseURL: mgr.url, reply: reply)
+                                              })])
                 } else {
                     placeholderView
                 }
