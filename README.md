@@ -3,14 +3,14 @@
 > [!WARNING]
 > **本项目已停止维护 / No longer maintained（2026-10-16）。**
 > 不再提供功能更新、问题修复或兼容性与安全更新。源码、历史版本及原有许可证保留，供参考和自行维护。
-> 后续开发将转向独立的、基于 Pi 的本地优先个人助理，计划支持网页、macOS 和 Windows；
-> 新项目名称与仓库地址确认后会在此补充。目前没有可直接替代本项目的新版本，也没有自动数据迁移。
+> 后续开发转向 [DogO（狗蛋）](https://github.com/Hcshenziyang/dogo)：独立的、基于 Pi 的本地优先个人助理，
+> 计划支持网页、macOS 和 Windows。DogO 当前处于规划阶段，没有可直接替代本项目的版本，也没有自动数据迁移。
 > 下文保留为历史使用说明，不代表仍在维护或承诺后续发布。
 >
 > This project is no longer maintained. No further feature, bug-fix, compatibility, or security updates are planned.
-> The source, release history, and existing license remain available. A separate Pi-based, local-first personal
-> assistant is planned; its name and repository will be announced once confirmed. No replacement release or
-> automatic data migration is currently available. The documentation below is retained for historical reference.
+> The source, release history, and existing license remain available. Future development continues in
+> [DogO](https://github.com/Hcshenziyang/dogo), a separate Pi-based, local-first personal assistant currently in planning.
+> No replacement release or automatic data migration is available. The documentation below is retained for historical reference.
 
 一个独立维护、专注 macOS 的 DSH 桌面客户端社区项目。在同一个项目中浏览资料、管理待办
 与便签、整理长期记忆，也可以随时打开对话，继续编码或让 AI 协助工作。
